@@ -24,9 +24,11 @@ fi
 
 if [ ! -e "$REPONAME" ]; then
     git clone "$REPO" "$DEST"
-    git remote add git-autosync "$SYNC_REPO"
 fi
 cd "$DEST"
+if ! git remote get-url git-autosync >& /dev/null; then
+    git remote add git-autosync "$SYNC_REPO"
+fi
 
 if [ ! -e ~/.git-autosync/worktrees ]; then
     mkdir -p ~/.git-autosync/worktrees

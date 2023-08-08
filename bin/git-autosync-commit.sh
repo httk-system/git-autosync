@@ -30,12 +30,12 @@ git add -A
 if [ -n "$(git diff --name-only --cached)" ]; then
     echo "Git-autosync commiting: $REPONAME"
 
-    git commit -m "Git-Autosync autocommit $(hotsname)" --no-gpg-sign
+    git commit -m "Git-Autosync autocommit $(hostname)" --no-gpg-sign
 
-    SSH_COMMAND="$(git config git-autosync.sshCommand)"
+    SSH_COMMAND="$(git config git-autosync.sshCommand || true)"
     if [ -n "$SSH_COMMAND" ]; then
-        GIT_SSH_COMMAND="$SSH_COMMAND" git push --set-upstream origin "git-autosync_$(hostname)"
+        GIT_SSH_COMMAND="$SSH_COMMAND" git push --set-upstream git-autosync "git-autosync_$(hostname)"
     else
-        git push --set-upstream origin "git-autosync_$(hostname)"
+        git push --set-upstream git-autosync "git-autosync_$(hostname)"
     fi
 fi
