@@ -9,9 +9,9 @@ else
 fi
 cd "$REPO"
 
-#git fetch git-autosync
+git fetch git-autosync
 
-REPODIR=$(pwd -P .)
+REPODIR=$(git rev-parse --show-toplevel)
 REPONAME=$(basename "$REPODIR")
 
 GIT=$(cat ~/".git-autosync/worktrees/$REPONAME/.git")

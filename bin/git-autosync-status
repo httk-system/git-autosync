@@ -11,11 +11,12 @@ cd "$REPO"
 
 #git fetch git-autosync
 
-REPODIR=$(pwd -P .)
+REPODIR=$(git rev-parse --show-toplevel)
+cd "$REPODIR"
 REPONAME=$(basename "$REPODIR")
 
 GIT=$(cat ~/".git-autosync/worktrees/$REPONAME/.git")
 export GIT_DIR="${GIT#*: }"
 git add -A
 BRANCH="git-autosync-$(hostname)"
-git diff --cached --stat
+git diff --cached --stat .

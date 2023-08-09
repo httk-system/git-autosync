@@ -14,8 +14,9 @@ if [ ! -e .git ]; then
     exit 1
 fi
 
-REPODIR=$(pwd -P .)
+REPODIR=$(git rev-parse --show-toplevel)
 REPONAME=$(basename "$REPODIR")
+cd "$REPODIR"
 
 if [ ! -e ~/".git-autosync/worktrees/$REPONAME/" ]; then
     echo "Missing git autosync worktree in: $REPODIR"
