@@ -23,8 +23,10 @@ if [ ! -e ~/".git-autosync/worktrees/$REPONAME/" ]; then
     exit 1
 fi
 
-rsync --delete -aq ./ ~/".git-autosync/worktrees/$REPONAME/" --exclude=/.git
-cd ~/".git-autosync/worktrees/$REPONAME/"
+#rsync --delete -aq ./ ~/".git-autosync/worktrees/$REPONAME/" --exclude=/.git
+#cd ~/".git-autosync/worktrees/$REPONAME"
+GIT=$(cat ~/".git-autosync/worktrees/$REPONAME/.git")
+export GIT_DIR="${GIT#*: }"
 git add -A
 
 if [ -n "$(git diff --name-only --cached)" ]; then
@@ -36,6 +38,6 @@ if [ -n "$(git diff --name-only --cached)" ]; then
     if [ -n "$SSH_COMMAND" ]; then
         GIT_SSH_COMMAND="$SSH_COMMAND" git push --set-upstream git-autosync "git-autosync_$(hostname)"
     else
-        git push --set-upstream git-autosync "git-autosync_$(hostname)"
+        git push --set-upstream git-autosync "git-autosync-$(hostname)"
     fi
 fi

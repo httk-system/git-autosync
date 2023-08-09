@@ -1,7 +1,8 @@
 # Git-autosync
 
-Tools for setting up continous dropbox-like syncronization of the working state of Git repositories into branches named `git-autosync-<hostname>`,
-which can (but must not) be in a separate repository.
+Tools for setting up continous dropbox-like syncronization of the working state of Git repositories into branches named `git-autosync-<hostname>`, which can (but must not) be in a separate repository.
+
+Note: this uses the worktree feature of git in a somewhat hacky way: it creates a worktree in a separate directory with --no-checkout, and then sets GIT_DIR to stage and commit all uncommited modifications into a new branch directly into the worktree directory meant for the checkout that was never made. Practically this seems to work, and logically it should work; but perhaps there could be some caveat with this that could cause failure in some unpredicatable way.
 
 ## Setup
 
@@ -19,7 +20,7 @@ If you do not want to use a setup for completely passwordless authentication wit
 git-autosync-setup-ssh username@server
 ```
 
-## For each repo 
+## For each repo
 
 (If you want to setup an empty repo, create it on your main repo host, e.g., GitHub, first.)
 
@@ -49,8 +50,4 @@ This can, e.g., be placed in an hourly cron job.
 ## Notes
 
 Operation keeps another set of full copies of your repos inside ~/.git-autosync, which may be a waste of time.
-These complete copies are not actually necessary, but speed things up. 
-
-
-
-
+These complete copies are not actually necessary, but speed things up.

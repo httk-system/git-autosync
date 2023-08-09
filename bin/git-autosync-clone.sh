@@ -10,7 +10,7 @@ fi
 REPO=$1
 SYNC_REPO=$2
 if [ -z "$3" ]; then
-    BRANCH="git-autosync_$(hostname)"
+    BRANCH="git-autosync-$(hostname)"
 else
     BRANCH="$3"
 fi
