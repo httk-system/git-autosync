@@ -27,6 +27,7 @@ done
 echo "== Looping through all repos"
 find . -type d -name ".git" -prune | while read LINE; do
     DIR=$(dirname "$LINE")
+    echo "= Checking: $DIR"
     (
         REPONAME=$(basename "$DIR")
 
@@ -34,7 +35,8 @@ find . -type d -name ".git" -prune | while read LINE; do
             echo "Skipping $DIR (no .git-autosync/worktree directory)"
         else
             cd "$DIR"
-            "$SCRIPT_DIR/git-autosync-commit" .
+            "$SCRIPT_DIR/git-autosync-sync" .
         fi
     )
+    echo ""
 done

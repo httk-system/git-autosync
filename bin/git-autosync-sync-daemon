@@ -25,7 +25,7 @@ ssh-agent bash -c '
   done
 
   while [ "0" == "0" ]; do
-    "'${SCRIPT_DIR}'"/git-autosync-commit-all "'${ROOTPATH}'"
-    sleep 60
+    "'${SCRIPT_DIR}'"/git-autosync-sync-all "'${ROOTPATH}'"
+    sleep 120
   done
 '

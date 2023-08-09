@@ -1,0 +1,43 @@
+#!/bin/bash
+
+set -e
+
+if [ -z "$1" ]; then
+    REPO="."
+else
+    REPO=$1
+fi
+
+cd "$REPO"
+if [ ! -e .git ]; then
+    echo "Not a git repo"
+    exit 1
+fi
+
+REPODIR=$(pwd -P .)
+REPONAME=$(basename "$REPODIR")
+
+if [ ! -e ~/".git-autosync/worktrees/$REPONAME/" ]; then
+    echo "Missing git autosync worktree in: $REPODIR"
+    exit 1
+fi
+
+GIT=$(cat ~/".git-autosync/worktrees/$REPONAME/.git")
+export GIT_DIR="${GIT#*: }"
+git add -A
+
+BRANCH="git-autosync-$(hostname)"
+
+if [ -n "$(git diff --name-only --cached)" ]; then
+    echo "Git-autosync commiting: $REPONAME"
+
+    git commit -m "Autocommit $(hostname) $(date '+%c')" --no-gpg-sign
+fi
+
+SSH_COMMAND="$(git config git-autosync.sshCommand || true)"
+if [ -n "$SSH_COMMAND" ]; then
+    GIT_SSH_COMMAND="$SSH_COMMAND" git push --set-upstream git-autosync "${BRANCH}"
+else
+    git merge main-worktree/HEAD --no-gpg-sign
+    git push --set-upstream git-autosync "${BRANCH}"
+fi

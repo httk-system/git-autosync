@@ -1,0 +1,21 @@
+#!/bin/bash
+
+set -e
+
+if [ -z "$1" ]; then
+    REPO="$1"
+else
+    REPO="."
+fi
+cd "$REPO"
+
+#git fetch git-autosync
+
+REPODIR=$(pwd -P .)
+REPONAME=$(basename "$REPODIR")
+
+GIT=$(cat ~/".git-autosync/worktrees/$REPONAME/.git")
+export GIT_DIR="${GIT#*: }"
+git add -A
+BRANCH="git-autosync-$(hostname)"
+git diff --cached --stat
