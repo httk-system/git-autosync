@@ -35,10 +35,13 @@ if [ -n "$(git diff --name-only --cached)" ]; then
     git commit -m "Autocommit $(hostname) $(date '+%c')" --no-gpg-sign
 fi
 
-SSH_COMMAND="$(git config git-autosync.sshCommand || true)"
-if [ -n "$SSH_COMMAND" ]; then
-    GIT_SSH_COMMAND="$SSH_COMMAND" git push --set-upstream git-autosync "${BRANCH}"
-else
-    git merge main-worktree/HEAD --no-gpg-sign
-    git push --set-upstream git-autosync "${BRANCH}"
+git merge main-worktree/HEAD --no-gpg-sign
+
+if [ -n "$(git cherry)" ]; then
+    SSH_COMMAND="$(git config git-autosync.sshCommand || true)"
+    if [ -n "$SSH_COMMAND" ]; then
+        GIT_SSH_COMMAND="$SSH_COMMAND" git push
+    else
+        git push
+    fi
 fi

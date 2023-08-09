@@ -35,4 +35,5 @@ if [ ! -e ~/.git-autosync/worktrees ]; then
 fi
 if [ ! -e ~/".git-autosync/worktrees/$REPONAME/" ]; then
     git worktree add ~/".git-autosync/worktrees/$REPONAME/" -b "$BRANCH" --no-checkout
+    git branch -u "git-autosync/git-autosync-$(hostname)" "$BRANCH"
 fi
