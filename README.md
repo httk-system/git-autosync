@@ -10,7 +10,7 @@ On both your ssh-accssible server and your local machine do:
 mkdir -p ~/Sync
 mkdir -p ~/Tools
 cd ~/Tools
-git clone git-autosync
+git clone https://github.com/httk-system/git-autosync.git
 ```
 Add ~/Tools/git-autosync/bin to your path (e.g., in `.bashrc`).
 
