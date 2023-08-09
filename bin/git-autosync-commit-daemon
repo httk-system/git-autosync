@@ -1,0 +1,31 @@
+#!/bin/bash
+
+set -e
+
+SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &> /dev/null && pwd -P)
+
+# Let this run in its own ssh-agent
+ssh-agent bash -c '
+
+  check_key() {
+    SEARCH=$(ssh-add -L | grep " ${1//./\\\.}\$")
+    if [ -z "$SEARCH" ]; then
+        return 0
+    else
+        return 1
+    fi
+  }
+
+  for PUBKEY in ~/.ssh/git-autosync/*.pub; do
+    PRIVKEY=$(basename "$PUBKEY" .pub)
+    if check_key ~/.ssh/git-autosync/"$PRIVKEY"; then
+        echo "== Adding key: $PRIVKEY"
+        ssh-add ~/.ssh/git-autosync/"$PRIVKEY"
+    fi
+  done
+
+  while [ "0" == "0" ]; do
+    "'${SCRIPT_DIR}'"/git-autosync-commit-all "'${ROOTPATH}'"
+    sleep 60
+  done
+'

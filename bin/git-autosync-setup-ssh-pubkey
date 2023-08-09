@@ -1,0 +1,29 @@
+#!/bin/bash
+
+set -e
+
+if [ "$#" -lt "1" ]; then
+    echo "Usage: $0 <remote>"
+    exit 1
+fi
+
+REMOTE="$1"
+
+if [ ! -e ~/".ssh/git-autosync" ]; then
+    mkdir -p  ~/".ssh/git-autosync"
+    chmod go-rwx ~/".ssh/git-autosync"
+fi
+
+if [ ! -e ~/".ssh/git-autosync/$REMOTE" ]; then
+    echo "== Generating a key to use with ssh-agent, please protect it with a password."
+    echo ""
+    ssh-keygen -q -t ed25519 -C "" -f ~/.ssh/git-autosync/"$REMOTE"
+    chmod go-rwx ~/".ssh/git-autosync/$REMOTE"
+    chmod go-rwx ~/".ssh/git-autosync/${REMOTE}.pub"
+fi
+
+echo "== Inserting the key into the remote"
+ssh-copy-id -i ~/.ssh/git-autosync/"$REMOTE".pub "$REMOTE"
+
+echo "== Checking that it works (should print out the hostname on the remote system)"
+ssh-agent bash -c "ssh-add ~/.ssh/git-autosync/\"$REMOTE\"; ssh \"$REMOTE\" hostname"

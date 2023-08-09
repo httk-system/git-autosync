@@ -1,0 +1,40 @@
+#!/bin/bash
+
+set -e
+
+check_key() {
+    SEARCH=$(ssh-add -L | grep " ${1//./\\\.}"'$')
+    if [ -z "$SEARCH" ]; then
+        return 0
+    else
+        return 1
+    fi
+}
+
+SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &> /dev/null && pwd -P)
+
+echo "== Loaded keys"
+ssh-add -l
+
+for PUBKEY in ~/.ssh/git-autosync/*.pub; do
+    PRIVKEY=$(basename "$PUBKEY" .pub)
+    if check_key ~/.ssh/git-autosync/"$PRIVKEY"; then
+        echo "== Adding key: $PRIVKEY"
+        ssh-add ~/.ssh/git-autosync/"$PRIVKEY"
+    fi
+done
+
+echo "== Looping through all repos"
+find . -type d -name ".git" -prune | while read LINE; do
+    DIR=$(dirname "$LINE")
+    (
+        REPONAME=$(basename "$DIR")
+
+        if [ ! -e ~/".git-autosync/worktrees/$REPONAME" ]; then
+            echo "Skipping $DIR (no .git-autosync/worktree directory)"
+        else
+            cd "$DIR"
+            "$SCRIPT_DIR/git-autosync-commit" .
+        fi
+    )
+done

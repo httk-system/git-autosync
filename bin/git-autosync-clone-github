@@ -35,7 +35,7 @@ echo "== Make sure this is configured as a git-autosync key:"
 cat ~/.ssh/git-autosync/"$REPONAME".pub
 echo "===="
 
-"$SCRIPT_DIR/git-autosync-clone.sh" "$@"
+"$SCRIPT_DIR/git-autosync-clone" "$@"
 
 cd "$DEST"
 git config git-autosync.sshCommand "ssh -o IdentityAgent=none -o IdentitiesOnly=yes -i ~/.ssh/git-autosync/\"$REPONAME\""
