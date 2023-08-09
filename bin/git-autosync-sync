@@ -37,11 +37,19 @@ fi
 
 git merge main-worktree/HEAD --no-gpg-sign
 
-if [ -n "$(git cherry)" ]; then
+if ! git show-branch "git-autosync/git-autosync-$(hostname)" >& /dev/null; then
+    PUSH_COMMAND="git push --set-upstream git-autosync \"git-autosync-$(hostname)\""
+    PUSH=yes
+else
+    PUSH_COMMAND="git push"
+    PUSH="$(git cherry | head -n 1)"
+fi
+
+if [ -n "$PUSH" ]; then
     SSH_COMMAND="$(git config git-autosync.sshCommand || true)"
     if [ -n "$SSH_COMMAND" ]; then
-        GIT_SSH_COMMAND="$SSH_COMMAND" git push
+        GIT_SSH_COMMAND="$SSH_COMMAND" eval "${PUSH_COMMAND}"
     else
-        git push
+        eval "${PUSH_COMMAND}"
     fi
 fi
