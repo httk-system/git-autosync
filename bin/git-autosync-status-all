@@ -23,11 +23,6 @@ for BRANCH in $(git branch -r -l 'git-autosync/git-autosync-*'); do
     RELATIVE=$(git rev-list --left-right --count "HEAD...${BRANCH}")
 
     printf "== Branch: %s\n" "$BASE"
-    BRANCH="git-autosync-$(hostname)"
     git diff --name-status "${BRANCH}"
     printf "\n"
-
-    #printf "%s: is %s commits behind, %s commits ahead of HEAD.\n" "$BASE" $RELATIVE
-    #git diff "${BRANCH}"
-    #printf "%s: is %s commits behind, %s commits ahead of HEAD.\n" "$BASE" $RELATIVE
 done
