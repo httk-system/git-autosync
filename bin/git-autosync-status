@@ -2,6 +2,13 @@
 
 set -e
 
+if [ "$1" == "--no-fetch" ]; then
+    FETCH=false
+    shift 1
+else
+    FETCH=true
+fi
+
 if [ -z "$1" ]; then
     REPO="$1"
 else
@@ -9,7 +16,9 @@ else
 fi
 cd "$REPO"
 
-#git fetch git-autosync
+if [ "$FETCH" == "true" ]; then
+    git fetch git-autosync
+fi
 
 REPODIR=$(git rev-parse --show-toplevel)
 cd "$REPODIR"

@@ -2,6 +2,13 @@
 
 set -e
 
+if [ "$1" == "--no-fetch" ]; then
+    FETCH=false
+    shift 1
+else
+    FETCH=true
+fi
+
 if [ -z "$1" ]; then
     REPO="$1"
 else
@@ -9,7 +16,9 @@ else
 fi
 cd "$REPO"
 
-git fetch git-autosync
+if [ "$FETCH" == "true" ]; then
+    git fetch git-autosync
+fi
 
 REPODIR=$(git rev-parse --show-toplevel)
 REPONAME=$(basename "$REPODIR")
@@ -20,9 +29,9 @@ git add -A
 
 for BRANCH in $(git branch -r -l 'git-autosync/git-autosync-*'); do
     BASE=$(basename "$BRANCH")
-    RELATIVE=$(git rev-list --left-right --count "HEAD...${BRANCH}")
-
-    printf "== Branch: %s\n" "$BASE"
+    #RELATIVE=$(git rev-list --left-right --count "HEAD...${BRANCH}")
+    LAST_BRANCH=$(git log ${BRANCH} -1 --pretty=%B)
+    printf "== %s at [%s] at %s\n" "$BASE" "$(cut -d\  -f4 <<<"$LAST_BRANCH")" "$(cut -d\  -f5- <<<"$LAST_BRANCH")"
     git diff --name-status "${BRANCH}"
     printf "\n"
 done

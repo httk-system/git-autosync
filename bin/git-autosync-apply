@@ -3,12 +3,24 @@
 set -e
 
 if [ "$#" -lt "1" ]; then
-    echo "Usage: $0 <branch>"
+    echo "Usage: $0 [--no-fetch] <branch>"
     exit 1
+fi
+
+if [ "$1" == "--no-fetch" ]; then
+    FETCH=false
+    shift 1
+else
+    FETCH=true
 fi
 
 BRANCH="$1"
 
 echo "== Note: if the apply aborts because it would overwrite untracked files, stage them (git add -A) and re-run the apply. You can then unstage them again after the apply if needed."
 echo ""
-git pull git-autosync "${BRANCH}" --squash
+
+if [ "$FETCH" == "true" ]; then
+    #git pull git-autosync "${BRANCH}" --squash
+    git fetch git-autosync "${BRANCH}"
+fi
+git merge "git-autosync/${BRANCH}" --squash

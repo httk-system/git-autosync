@@ -1,0 +1,43 @@
+#!/bin/bash
+
+set -e
+
+SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &> /dev/null && pwd -P)
+
+if [ "$1" == "--no-fetch" ]; then
+    FETCH=false
+    shift 1
+else
+    FETCH=true
+fi
+
+if [ -z "$1" ]; then
+    REPO="$1"
+else
+    REPO="."
+fi
+cd "$REPO"
+
+if [ "$FETCH" == "true" ]; then
+    git fetch git-autosync
+fi
+
+REPODIR=$(git rev-parse --show-toplevel)
+REPONAME=$(basename "$REPODIR")
+cd "$REPODIR"
+LOCAL_BRANCH=$(git rev-parse --abbrev-ref HEAD)
+
+for BRANCH in $(git branch -r -l 'git-autosync/git-autosync-*'); do
+    BASE="$(basename "$BRANCH")"
+    if [ "$BASE" == "git-autosync-$(hostname)" ]; then
+        echo "= Skipping $BASE since it is the local sync branch."
+        continue
+    fi
+    LAST_LOG="$(git log ${BRANCH} -1 --pretty=%B)"
+    LAST_BRANCH="$(cut -d\  -f4 <<<"$LAST_LOG")"
+    if [ "$LOCAL_BRANCH" == "$LAST_BRANCH" ]; then
+        "${SCRIPT_DIR}"/git-autosync-apply --no-fetch "$BASE"
+    else
+        echo "= Skipping $BASE since it was made on a diffent branch: $LAST_BRANCH /= $LOCAL_BRANCH"
+    fi
+done

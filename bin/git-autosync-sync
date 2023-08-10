@@ -25,23 +25,32 @@ fi
 
 GIT=$(cat ~/".git-autosync/worktrees/$REPONAME/.git")
 export GIT_DIR="${GIT#*: }"
+
+# Make sure we have files from the right branch staged in case we happen to run this during a branch switch
 git add -A
+LOCAL_BRANCH=$(git rev-parse --abbrev-ref main-worktree/HEAD)
+sleep 1
+while [ -n "$(git diff --quiet --cached)" -o "$LOCAL_BRANCH" != "$(git rev-parse --abbrev-ref main-worktree/HEAD)" ]; do
+    echo "Note: files or branch changing while working; updating."
+    git add -A
+    LOCAL_BRANCH=$(git rev-parse --abbrev-ref main-worktree/HEAD)
+    sleep 1
+done
 
 BRANCH="git-autosync-$(hostname)"
 
 if [ -n "$(git diff --name-only --cached)" ]; then
     echo "Git-autosync commiting: $REPONAME"
-
-    git commit -m "Autocommit $(hostname) $(date '+%c')" --no-gpg-sign
+    git commit -m "Autocommit ${REPONAME} $(hostname) ${LOCAL_BRANCH} $(date -R)" --no-gpg-sign
 fi
 
 git merge main-worktree/HEAD --no-gpg-sign
 
 if ! git show-branch "git-autosync/git-autosync-$(hostname)" >& /dev/null; then
-    PUSH_COMMAND="git push --set-upstream git-autosync \"git-autosync-$(hostname)\""
+    PUSH_COMMAND="git push --set-upstream git-autosync \"git-autosync-$(hostname)\" --follow-tags"
     PUSH=yes
 else
-    PUSH_COMMAND="git push"
+    PUSH_COMMAND="git push --follow-tags"
     PUSH="$(git cherry | head -n 1)"
 fi
 
