@@ -41,10 +41,10 @@ BRANCH="git-autosync-$(hostname)"
 
 if [ -n "$(git diff --name-only --cached)" ]; then
     echo "Git-autosync commiting: $REPONAME"
-    git commit -m "Autocommit ${REPONAME} $(hostname) ${LOCAL_BRANCH} $(date -R)" --no-gpg-sign
+    git commit -m "git-autosync commit ${REPONAME} $(hostname) ${LOCAL_BRANCH} $(date -R)" --no-gpg-sign
 fi
 
-git merge main-worktree/HEAD --no-gpg-sign
+git merge main-worktree/HEAD --no-gpg-sign -m "git-autosync merge ${REPONAME} $(hostname) ${LOCAL_BRANCH} $(date -R)"
 
 if ! git show-branch "git-autosync/git-autosync-$(hostname)" >& /dev/null; then
     PUSH_COMMAND="git push --set-upstream git-autosync \"git-autosync-$(hostname)\" --follow-tags"

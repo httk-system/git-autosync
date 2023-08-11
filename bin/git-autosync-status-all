@@ -31,8 +31,15 @@ git add -A
 for BRANCH in $(git branch -r -l 'git-autosync/git-autosync-*'); do
     BASE=$(basename "$BRANCH")
     #RELATIVE=$(git rev-list --left-right --count "HEAD...${BRANCH}")
-    LAST_BRANCH=$(git log ${BRANCH} -1 --pretty=%B)
-    printf "== %s at [%s] at %s\n" "$BASE" "$(cut -d\  -f4 <<<"$LAST_BRANCH")" "$(cut -d\  -f5- <<<"$LAST_BRANCH")"
+    LAST_MSG=$(git log ${BRANCH} -1 --pretty=%B)
+    if [ "${LAST_MSG#git-autosync}" != "${LAST_MSG}" ]; then
+        LAST_BRANCH="[$(cut -d\  -f5 <<<"$LAST_MSG")]"
+        TIMESTAMP="at $(cut -d\  -f6- <<<"$LAST_MSG")"
+    else
+        LAST_BRANCH="[??] (msg: $(head -n 1 <<<"$LAST_MSG"))"
+        TIMESTAMP=""
+    fi
+    printf "== %s from %s %s\n" "$BASE" "$LAST_BRANCH" "$TIMESTAMP"
     git diff --name-status "${BRANCH}"
     printf "\n"
 done
