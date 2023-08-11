@@ -16,12 +16,13 @@ else
 fi
 cd "$REPO"
 
+REPODIR=$(git rev-parse --show-toplevel)
+REPONAME=$(basename "$REPODIR")
+cd "$REPODIR"
+
 if [ "$FETCH" == "true" ]; then
     git fetch git-autosync
 fi
-
-REPODIR=$(git rev-parse --show-toplevel)
-REPONAME=$(basename "$REPODIR")
 
 GIT=$(cat ~/".git-autosync/worktrees/$REPONAME/.git")
 export GIT_DIR="${GIT#*: }"
