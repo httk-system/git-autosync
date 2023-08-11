@@ -3,12 +3,16 @@
 set -e
 
 if [ "$#" -lt "1" ]; then
-    echo "Usage: $0 <origin repo> <sync repo> [git-as branch] [dest path]"
+    echo "Usage: $0 <origin repo> [<sync repo>] [autosync to branch] [clone into path]"
     exit 1
 fi
 
 REPO=$1
-SYNC_REPO=$2
+if [ -z "$2" ]; then
+    SYNC_REPO=$1
+else
+    SYNC_REPO=$2
+fi
 if [ -z "$3" ]; then
     BRANCH="git-autosync-$(hostname)"
 else
