@@ -9,14 +9,14 @@ else
 fi
 
 cd "$REPO"
-if [ ! -e .git ]; then
-    echo "Not a git repo"
-    exit 1
-fi
 
 REPODIR=$(git rev-parse --show-toplevel)
 REPONAME=$(basename "$REPODIR")
 cd "$REPODIR"
+if [ ! -e .git ]; then
+    echo "Not a git repo"
+    exit 1
+fi
 
 if [ ! -e ~/".git-autosync/worktrees/$REPONAME/" ]; then
     echo "Missing git autosync worktree in: $REPODIR"
