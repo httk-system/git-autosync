@@ -1,0 +1,93 @@
+#!/bin/bash
+
+set -e
+
+if [ "$#" -lt "2" ]; then
+    echo "Usage: $0 <remote system> <remote path>"
+    echo
+    echo "  Give <remote path>, e.g., user@example.com:path/to/repos to find all git repos under that path"
+    echo "  and clone them under the present path. When doing this, the command also searches through the"
+    echo "  current working directory, and if there are already cloned matching repositories, they are"
+    echo "  moved into place to match the remote directory structure."
+    exit 1
+fi
+
+RHOST="$1"
+RPATH="$2"
+
+GIT_IDS=$(find . -type d -name ".git" -prune | while read LINE; do
+              (
+                  cd "${LINE}"
+                  if [ -e "${LINE}/.gituuid" ]; then
+                      ID="$(cat "${LINE}/.gituuid")"
+                  else
+                      ID="$(git rev-list --parents HEAD | tail -1)"
+                  fi
+                  echo "$ID" "$LINE"
+              )
+done)
+
+GIT_REMOTE_IDS=$(ssh "$RHOST" bash -c 'cd "$RPATH"; find . -type d -name ".git" -prune | while read LINE; do
+              (
+                  echo "PROCESSING ${LINE}" >&2
+                  cd "${LINE}"
+                  if [ -e "${LINE}/.gituuid" ]; then
+                      ID="$(cat "${LINE}/.gituuid")"
+                  else
+                      ID="$(git rev-list --parents HEAD | tail -1)"
+                  fi
+                  echo "$ID" "$LINE"
+              )
+done')
+
+echo "LOCAL IDS"
+echo "$GIT_IDS"
+
+echo "REMOTE IDS"
+echo "$GIT_IDS"
+
+
+echo "Work in progress"
+exit 0
+
+REPO=$1
+if [ -z "$2" ]; then
+    SYNC_REPO=$1
+else
+    SYNC_REPO=$2
+fi
+if [ -z "$3" ]; then
+    BRANCH="git-autosync-$(hostname)"
+else
+    BRANCH="$3"
+fi
+if [ -z "$4" ]; then
+    REPONAME=$(basename "$REPO" .git)
+    DEST="./$REPONAME"
+else
+    DEST="$4"
+    REPONAME=$(basename "$DEST")
+fi
+
+if [ ! -e "$REPONAME" ]; then
+    git clone "$REPO" "$DEST"
+fi
+cd "$DEST"
+
+if ! git rev-parse HEAD >& /dev/null; then
+    echo "== Cloned repository is empty, creating and pushing empty initial commit."
+    git branch -m main
+    git commit -m "Initial commit" --allow-empty
+    git push --set-upstream origin main
+fi
+
+if ! git remote get-url git-autosync >& /dev/null; then
+    git remote add git-autosync "$SYNC_REPO"
+fi
+
+if [ ! -e ~/.git-autosync/worktrees ]; then
+    mkdir -p ~/.git-autosync/worktrees
+fi
+if [ ! -e ~/".git-autosync/worktrees/$REPONAME/" ]; then
+    git worktree add ~/".git-autosync/worktrees/$REPONAME/" -b "$BRANCH" --no-checkout
+fi
