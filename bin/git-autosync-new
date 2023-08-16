@@ -1,0 +1,28 @@
+#!/bin/bash
+
+set -e
+
+SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &> /dev/null && pwd -P)
+
+if [ "$#" -ne "1" ]; then
+    echo "Usage: $0 <remote>"
+    exit 1
+fi
+
+REMOTE="$1"
+
+if [ "${REMOTE%.git}" == "${REMOTE}" ]; then
+    BARE_REMOTE="${REMOTE}.git"
+    REMOTE="${REMOTE}"
+else
+    BARE_REMOTE="${REMOTE}"
+    REMOTE="${REMOTE%.git}"
+fi
+LOCAL="$(basename "$REMOTE")"
+
+RHOST="${BARE_REMOTE%%:*}"
+RPATH="${BARE_REMOTE#*:}"
+
+ssh "$RHOST" bash -c "echo -n \"\"; mkdir -p \"$RPATH\" && cd \"$RPATH\" && git init --bare --initial-branch=main ."
+
+"${SCRIPT_DIR}"/git-autosync-clone "$BARE_REMOTE"
