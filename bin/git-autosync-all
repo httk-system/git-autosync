@@ -2,8 +2,8 @@
 
 set -e
 
-if [ "$#" -lt "2" ]; then
-    echo "Usage: $0 <remote system> <remote path>"
+if [ "$#" -lt "1" ]; then
+    echo "Usage: $0 <remote path>"
     echo
     echo "  Give <remote path>, e.g., user@example.com:path/to/repos to find all git repos under that path"
     echo "  and clone them under the present path. When doing this, the command also searches through the"
@@ -12,8 +12,25 @@ if [ "$#" -lt "2" ]; then
     exit 1
 fi
 
-RHOST="$1"
-RPATH="$2"
+REMOTE="$1"
+RHOST="${REMOTE%:*}"
+RPATH="${REMOTE##*:}"
+
+echo "RHOST: $RHOST"
+echo "RPATH: $RPATH"
+
+if [ ! -e ./.git-autosync-root ]; then
+    echo ""
+    echo "As a saftey feature, git-autosync-all requires the file .git-autosync-root"
+    echo "to exist in both the source and destination directories it operates on."
+    echo "This ensures it is not accidentally invoked on the wrong directoires"
+    echo ""
+    echo "The local .git-autosync-root file is missing."
+    echo ""
+    echo "Verify that you are in the right directory, create an empty .git-autosync-root, and try again."
+    echo ""
+    exit 1
+fi
 
 GIT_IDS=$(find . -type d -name ".git" -prune | while read LINE; do
               (
@@ -27,7 +44,7 @@ GIT_IDS=$(find . -type d -name ".git" -prune | while read LINE; do
               )
 done)
 
-GIT_REMOTE_IDS=$(ssh "$RHOST" bash -c 'cd "$RPATH"; find . -type d -name ".git" -prune | while read LINE; do
+GIT_SRC_IDS=$(ssh "$RHOST" bash -c 'echo cd "'"$RPATH"'"; cd "'"$RPATH"'"; if [ ! -e ./.git-autosync-repos-root ]; then echo "SAFTEY CHECK FAIL"; exit 0; fi; find . -type d -name ".git" -prune | while read LINE; do
               (
                   echo "PROCESSING ${LINE}" >&2
                   cd "${LINE}"
@@ -36,16 +53,40 @@ GIT_REMOTE_IDS=$(ssh "$RHOST" bash -c 'cd "$RPATH"; find . -type d -name ".git" 
                   else
                       ID="$(git rev-list --parents HEAD | tail -1)"
                   fi
-                  echo "$ID" "$LINE"
+                  REPO=$(basename $LINE .git)
+                  echo "$ID" "$REPO"
               )
 done')
 
-echo "LOCAL IDS"
-echo "$GIT_IDS"
+if grep -q '^SAFTEY CHECK FAIL$' <<< "$GIT_MOVE_COMMANDS"; then
+    echo ""
+    echo "As a saftey feature, git-autosync-all requires specific hidden files"
+    echo "to exist in both the source and destination directories it operates on."
+    echo "This ensures it is not accidentally invoked on the wrong directoires"
+    echo ""
+    echo "The remote .git-autosync-repos-root file is missing."
+    echo ""
+    echo "Verify that you giving the right remote path, login on that server and create an empty .git-autosync-root, and try again."
+    echo ""
+    exit 1
+fi
 
-echo "REMOTE IDS"
+echo "---"
 echo "$GIT_IDS"
+echo "---"
+echo "$GIT_SRC_IDS"
+echo "---"
 
+while IFS= read -r LINE; do
+    ID=$(cut -d ' ' -f1)
+    LPATH=$(cut -d ' ' -f2-)
+    MATCH=$(grep "$ID" <<< "$GIT_SRC_IDS" | cut -d' ' -f2-);
+    if [ -z "$MATCH" ]; then
+        echo mv "$LPATH" "Trash"
+    else
+        echo mv "$LPATH" "MATCH"
+    fi
+done <<< "$GIT_IDS"
 
 echo "Work in progress"
 exit 0
