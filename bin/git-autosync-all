@@ -2,6 +2,8 @@
 
 set -e
 
+SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &> /dev/null && pwd -P)
+
 if [ "$#" -lt "1" ]; then
     echo "Usage: $0 <remote path>"
     echo
@@ -15,9 +17,6 @@ fi
 REMOTE="$1"
 RHOST="${REMOTE%:*}"
 RPATH="${REMOTE##*:}"
-
-echo "RHOST: $RHOST"
-echo "RPATH: $RPATH"
 
 if [ ! -e ./.git-autosync-root ]; then
     echo ""
@@ -33,28 +32,23 @@ if [ ! -e ./.git-autosync-root ]; then
 fi
 
 GIT_IDS=$(find . -type d -name ".git" -prune | while read LINE; do
-              (
-                  cd "${LINE}"
-                  if [ -e "${LINE}/.gituuid" ]; then
-                      ID="$(cat "${LINE}/.gituuid")"
-                  else
-                      ID="$(git rev-list --parents HEAD | tail -1)"
-                  fi
-                  echo "$ID" "$LINE"
-              )
-done)
+              if [ -e "${LINE}/.gituuid" ]; then
+                  ID="$(cat "${LINE}/.gituuid")"
+              else
+                  ID="$(git --git-dir "${LINE}" rev-list --parents HEAD | tail -1)"
+              fi
+              LPATH="$(dirname "$LINE")"
+              echo "$ID" "${LPATH#./}"
+          done)
 
-GIT_SRC_IDS=$(ssh "$RHOST" bash -c 'echo cd "'"$RPATH"'"; set -e; cd "'"$RPATH"'"; if [ ! -e ./.git-autosync-repos-root ]; then echo "SAFTEY CHECK FAIL"; exit 0; fi; find . -type d -name "*.git" -prune | while read LINE; do
-              (
-                  echo "PROCESSING ${LINE}" >&2
-                  cd "${LINE}"
-                  if git show HEAD:.gituuid >& /dev/null; then
-                      ID="$(git show HEAD:.gituuid)"
+GIT_SRC_IDS=$(ssh "$RHOST" bash -c 'true; set -e; cd "'"$RPATH"'"; if [ ! -e ./.git-autosync-repos-root ]; then echo "SAFTEY CHECK FAIL"; exit 0; fi; find . -type d -name "*.git" -prune | while read LINE; do
+                  if git --git-dir "${LINE}" show HEAD:.gituuid >& /dev/null; then
+                      ID="$(git --git-dir "${LINE}" show HEAD:.gituuid)"
                   else
-                      ID="$(git rev-list --parents HEAD | tail -1)"
+                      ID="$(git --git-dir "${LINE}" rev-list --parents HEAD | tail -1)"
                   fi
-                  echo "$ID" "${LINE%.git}"
-              )
+                  RPATH="${LINE%.git}"
+                  echo "$ID" "${RPATH#./}"
 done')
 
 if grep -q '^SAFTEY CHECK FAIL$' <<< "$GIT_MOVE_COMMANDS"; then
@@ -70,74 +64,103 @@ if grep -q '^SAFTEY CHECK FAIL$' <<< "$GIT_MOVE_COMMANDS"; then
     exit 1
 fi
 
-echo "---"
+echo
+echo "--- LOCAL REPO IDS ---"
 echo "$GIT_IDS"
 echo "---"
+echo
+echo "--- REMOTE REPO IDS ---"
 echo "$GIT_SRC_IDS"
 echo "---"
+echo
 
+CONFIRM_MOVE() {
+    read -u 3 -p "== Confirm move $1 -> $2 [y/n]?: " CONFIRM
+    if [ "$CONFIRM" != "y" ]; then
+        echo "User stop." >&2
+        exit 1
+    else
+        DIRNAME=$(dirname "$2")
+        mkdir -p "$DIRNAME"
+        mv "$1" "$2"
+    fi
+}
+
+exec 3<&0
 while IFS= read -r LINE; do
-    ID=$(cut -d ' ' -f1)
-    LPATH=$(cut -d ' ' -f2-)
+    ID=$(cut -d ' ' -f1 <<< "$LINE")
+    LPATH=$(cut -d ' ' -f2- <<< "$LINE")
     MATCH=$(grep "$ID" <<< "$GIT_SRC_IDS" | cut -d' ' -f2-);
     if [ -n "$MATCH" ]; then
         if [ -e "$MATCH" ]; then
-            DEST_ID=$(cd "${LINE}"; if [ -e "${LINE}/.gituuid" ]; then echo "$(cat "${LINE}/.gituuid")"; else echo "$(git rev-list --parents HEAD | tail -1)"; fi)
+            DEST_ID=$(if [ -e "${LPATH}/.gituuid" ]; then echo "$(cat "${LPATH}/.gituuid")"; else echo "$(git --git-dir "$LPATH/.git" rev-list --parents HEAD | tail -1)"; fi)
             if [ "$DEST_ID" == "$ID" ]; then
-                echo mv "$LPATH" "Trash/$(basename "$LPATH").$RANDOM"
+                echo "== Repo already in place: $LPATH"
             else
-                echo mv "$MATCH" "Trash/$(basename "$MATCH").$RANDOM"
-                echo mv "$LPATH" "$MATCH"
+                echo "TWO"
+                CONFIRM_MOVE "$MATCH" "Trash/$(basename "$MATCH").$RANDOM"
+                if [ -e "${LPATH}.disabled" ]; then
+                    echo "THREE"
+                    CONFIRM_MOVE "$LPATH" "Trash/$(basename "$LPATH").$RANDOM"
+                else
+                    CONFIRM_MOVE "$LPATH" "$MATCH"
+                fi
             fi
         else
-            echo mv "$LPATH" "$MATCH"
+            if [ -e "${LPATH}.disabled" ]; then
+                echo "FOUR"
+                CONFIRM_MOVE "$LPATH" "Trash/$(basename "$LPATH").$RANDOM"
+            else
+                CONFIRM_MOVE "$LPATH" "$MATCH"
+            fi
         fi
     else
-        echo mv "$LPATH" "Trash/$(basename "$LPATH").$RANDOM"
+        echo "FIVE"
+        CONFIRM_MOVE "$LPATH" "Trash/$(basename "$LPATH").$RANDOM"
     fi
 done <<< "$GIT_IDS"
 
-echo "Work in progress"
-exit 0
+CONFIRM_SETURL() {
+    read -u 3 -p "== Confirm set-url on '$1' branch '$2' to '$3' [y/n]?: " CONFIRM
+    if [ "$CONFIRM" != "y" ]; then
+        echo "Remote left alone." >&2
+    else
+        git --git-dir "$1/.git" remote set-url "$2" "$3"
+    fi
+}
 
-REPO=$1
-if [ -z "$2" ]; then
-    SYNC_REPO=$1
-else
-    SYNC_REPO=$2
-fi
-if [ -z "$3" ]; then
-    BRANCH="git-autosync-$(hostname)"
-else
-    BRANCH="$3"
-fi
-if [ -z "$4" ]; then
-    REPONAME=$(basename "$REPO" .git)
-    DEST="./$REPONAME"
-else
-    DEST="$4"
-    REPONAME=$(basename "$DEST")
-fi
+CONFIRM_CLONE() {
+    read -u 3 -p "== Confirm clone '$1' into '$2' [y/n]?: " CONFIRM
+    if [ "$CONFIRM" != "y" ]; then
+        echo "Clone skipped." >&2
+    else
+        "${SCRIPT_DIR}"/git-autosync-clone "${1}" "" "" "${2}"
+    fi
+}
 
-if [ ! -e "$REPONAME" ]; then
-    git clone "$REPO" "$DEST"
-fi
-cd "$DEST"
-
-if ! git rev-parse HEAD >& /dev/null; then
-    echo "== Cloned repository is empty, creating and pushing empty initial commit."
-    git branch -m main
-    git commit -m "Initial commit" --allow-empty
-    git push --set-upstream origin main
-fi
-
-if ! git remote get-url git-autosync >& /dev/null; then
-    git remote add git-autosync "$SYNC_REPO"
-fi
-
-if [ ! -e ~/.git-autosync/worktrees ]; then
-    mkdir -p ~/.git-autosync/worktrees
-fi
-if [ ! -e ~/".git-autosync/worktrees/$REPONAME/" ]; then
-    git worktree add ~/".git-autosync/worktrees/$REPONAME/" -b "$BRANCH" --no-checkout
-fi
+while IFS= read -r LINE; do
+    ID=$(cut -d ' ' -f1 <<< "$LINE")
+    LPATH=$(cut -d ' ' -f2- <<< "$LINE")
+    if [ -e "$LPATH" ]; then
+        DEST_ID=$(if [ -e "${LPATH}/.gituuid" ]; then echo "$(cat "${LPATH}/.gituuid")"; else echo "$(git --git-dir "$LPATH/.git" rev-list --parents HEAD | tail -1)"; fi)
+        if [ "$DEST_ID" == "$ID" ]; then
+            ORIGIN=$(git --git-dir "$LPATH/.git" remote get-url origin)
+            if [ "${ORIGIN#$REMOTE}" != "${ORIGIN}" ]; then
+                CONFIRM_SETURL "$LPATH" origin "${REMOTE}/${LPATH}"
+            fi
+            AUTOSYNC=$(git --git-dir "$LPATH/.git" remote get-url git-autosync)
+            if [ "${AUTOSYNC#$REMOTE}" != "${AUTOSYNC}" ]; then
+                CONFIRM_SETURL "$LPATH" git-autosync "${REMOTE}/${LPATH}"
+            fi
+        else
+            echo "Unexpected path error. The path:"
+            echo "  $LPATH"
+            echo "Contains a repo that does not match the destination repo, yet it was not moved away."
+            exit 1
+        fi
+    else
+        if [ -e "${LPATH}.disabled" ]; then
+            CONFIRM_CLONE "${REMOTE}/${LPATH}" "${LPATH}"
+        fi
+    fi
+done <<< "$GIT_SRC_IDS"
