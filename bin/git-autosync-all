@@ -21,7 +21,7 @@ echo "RPATH: $RPATH"
 
 if [ ! -e ./.git-autosync-root ]; then
     echo ""
-    echo "As a saftey feature, git-autosync-all requires the file .git-autosync-root"
+    echo "As a saftey feature, git-autosync-all requires specific hidden files"
     echo "to exist in both the source and destination directories it operates on."
     echo "This ensures it is not accidentally invoked on the wrong directoires"
     echo ""
@@ -44,17 +44,16 @@ GIT_IDS=$(find . -type d -name ".git" -prune | while read LINE; do
               )
 done)
 
-GIT_SRC_IDS=$(ssh "$RHOST" bash -c 'echo cd "'"$RPATH"'"; cd "'"$RPATH"'"; if [ ! -e ./.git-autosync-repos-root ]; then echo "SAFTEY CHECK FAIL"; exit 0; fi; find . -type d -name ".git" -prune | while read LINE; do
+GIT_SRC_IDS=$(ssh "$RHOST" bash -c 'echo cd "'"$RPATH"'"; set -e; cd "'"$RPATH"'"; if [ ! -e ./.git-autosync-repos-root ]; then echo "SAFTEY CHECK FAIL"; exit 0; fi; find . -type d -name "*.git" -prune | while read LINE; do
               (
                   echo "PROCESSING ${LINE}" >&2
                   cd "${LINE}"
-                  if [ -e "${LINE}/.gituuid" ]; then
-                      ID="$(cat "${LINE}/.gituuid")"
+                  if git show HEAD:.gituuid >& /dev/null; then
+                      ID="$(git show HEAD:.gituuid)"
                   else
                       ID="$(git rev-list --parents HEAD | tail -1)"
                   fi
-                  REPO=$(basename $LINE .git)
-                  echo "$ID" "$REPO"
+                  echo "$ID" "${LINE%.git}"
               )
 done')
 
@@ -81,10 +80,20 @@ while IFS= read -r LINE; do
     ID=$(cut -d ' ' -f1)
     LPATH=$(cut -d ' ' -f2-)
     MATCH=$(grep "$ID" <<< "$GIT_SRC_IDS" | cut -d' ' -f2-);
-    if [ -z "$MATCH" ]; then
-        echo mv "$LPATH" "Trash"
+    if [ -n "$MATCH" ]; then
+        if [ -e "$MATCH" ]; then
+            DEST_ID=$(cd "${LINE}"; if [ -e "${LINE}/.gituuid" ]; then echo "$(cat "${LINE}/.gituuid")"; else echo "$(git rev-list --parents HEAD | tail -1)"; fi)
+            if [ "$DEST_ID" == "$ID" ]; then
+                echo mv "$LPATH" "Trash/$(basename "$LPATH").$RANDOM"
+            else
+                echo mv "$MATCH" "Trash/$(basename "$MATCH").$RANDOM"
+                echo mv "$LPATH" "$MATCH"
+            fi
+        else
+            echo mv "$LPATH" "$MATCH"
+        fi
     else
-        echo mv "$LPATH" "MATCH"
+        echo mv "$LPATH" "Trash/$(basename "$LPATH").$RANDOM"
     fi
 done <<< "$GIT_IDS"
 
