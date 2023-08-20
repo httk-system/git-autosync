@@ -1,0 +1,43 @@
+#!/bin/bash
+
+set -e
+
+CONFDIR=$(git-cloud confdir)
+source "${CONFDIR}/config"
+
+if [ "$1" == "describe" ]; then
+   echo "Continously create checkpoints of the whole repotree."
+   exit 0
+elif [ "$1" == "help" ]; then
+    echo
+    echo "Usage: git cloud daemon"
+    echo
+    echo "Continously create checkpoints of the whole repotree."
+    echo
+    exit 0
+fi
+
+ssh-agent bash -c '
+
+  check_key() {
+    SEARCH=$(ssh-add -L | grep " ${1//./\\\.}\$")
+    if [ -z "$SEARCH" ]; then
+        return 0
+    else
+        return 1
+    fi
+  }
+
+  for PUBKEY in "'$GIT_CLOUD_SSHDIR'"/*.pub; do
+    PRIVKEY=$(basename "$PUBKEY" .pub)
+    if check_key ~/.ssh/git-autosync/"$PRIVKEY"; then
+        echo "== Adding key: $PRIVKEY"
+        ssh-add ~/.ssh/git-autosync/"$PRIVKEY"
+    fi
+  done
+
+  while [ "0" == "0" ]; do
+    git cloud snaptree
+    sleep 120
+  done
+'

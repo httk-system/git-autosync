@@ -1,0 +1,67 @@
+#!/bin/bash
+
+SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &> /dev/null && pwd -P)
+export HELPER_PATH="${SCRIPT_DIR}/../helpers"
+export PATH="${HELPER_PATH}:$PATH"
+
+if [ -z "$1" -o "$1" == "help" -o "$1" == "--help" ]; then
+    if [ -z "$2" ]; then
+        echo
+        echo "git-cloud - timeline and syncronization helpers to maintain a 'cloud' tree of git repos."
+        echo
+        echo "Modes of operation:"
+        echo
+        for HELPER in "${HELPER_PATH}"/git-cloud-*; do
+            if [ "${HELPER%*~}" != "${HELPER}" ]; then
+                continue
+            fi
+            DESC=$("$HELPER" describe)
+            HELPER_NAME=$(basename "$HELPER")
+            echo "  ${HELPER_NAME#git-cloud-}:" "${DESC}"
+        done
+        echo
+        echo "For more info, execute: git-cloud help <mode>"
+        echo
+        exit 0
+    else
+        MODE=$2
+        if [ -e "${HELPER_PATH}"/"git-cloud-${MODE}" ]; then
+            shift 2
+            "${HELPER_PATH}"/"git-cloud-${MODE}" help "$@"
+            exit 0
+        else
+            echo "Unknown mode: ${MODE}"
+            exit 1
+        fi
+    fi
+fi
+
+MODE="$1"
+shift 1
+
+if [ "$MODE" == "confdir" ]; then
+    if [ -e ~/.git-cloud ]; then
+        CONFDIR=~/git-cloud
+    elif [ -n "$XDG_CONFIG_HOME" ]; then
+        if [ "$XDG_CONFIG_HOME" != "$HOME" ]; then
+            CONFDIR="$XDG_CONFIG_HOME/git-cloud"
+        else
+            CONFDIR=~/.git-cloud
+        fi
+    elif [ -d ~/.config ]; then
+        CONFDIR=~/.config/git-cloud
+    fi
+    if [ ! -e "${CONFDIR}/config" ]; then
+        mkdir -p "$CONFDIR"
+        mkdir -p ~/.ssh/git-cloud
+        cat > "${CONFDIR}/config" <<EOF
+GIT_CLOUD_SSHDIR="$HOME/.ssh/git-cloud"
+GIT_CLOUD_REMOTE_NAME="cloud"
+GIT_CLOUD_SNAPSHOT_BRANCH_PREFIX="snapshot"
+EOF
+    fi
+    echo "${CONFDIR}"
+    exit 0
+fi
+
+"${HELPER_PATH}"/"git-cloud-${MODE}" "$@"

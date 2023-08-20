@@ -1,0 +1,39 @@
+#!/bin/bash
+
+set -e
+
+CONFDIR=$(git-cloud confdir)
+source "${CONFDIR}/config"
+
+if [ "$1" == "describe" ]; then
+   echo "Create a public ssh key specifically for use with git-cloud."
+   exit 0
+elif [ "$1" == "help" -o "$#" -ne "1" ]; then
+    echo
+    echo "Usage: git cloud key <remote>"
+    echo
+    echo "Create a public ssh key specifically for use with git-cloud."
+    echo ""
+    exit 0
+fi
+
+REMOTE="$1"
+
+if [ -n "${GIT_CLOUD_SSHDIR}" -a ! -e "$GIT_CLOUD_SSHDIR" ]; then
+    mkdir -p "$GIT_CLOUD_SSHDIR"
+    chmod go-rwx "$GIT_CLOUD_SSHDIR"
+fi
+
+if [ ! -e "${GIT_CLOUD_SSHDIR}/$REMOTE" ]; then
+    echo "== Generating a key to use with ssh-agent, please protect it with a password."
+    echo ""
+    ssh-keygen -q -t ed25519 -C "" -f "${GIT_CLOUD_SSHDIR}/$REMOTE"
+    chmod go-rwx "${GIT_CLOUD_SSHDIR}/$REMOTE"
+    chmod go-rwx "${GIT_CLOUD_SSHDIR}/${REMOTE}.pub"
+fi
+
+echo "== Inserting the key into the remote"
+ssh-copy-id -i "${GIT_CLOUD_SSHDIR}/${REMOTE}.pub" "$REMOTE"
+
+echo "== Checking that it works (should print out the hostname on the remote system)"
+ssh-agent bash -c "ssh-add ${GIT_CLOUD_SSHDIR}/\"$REMOTE\"; ssh \"$REMOTE\" hostname"

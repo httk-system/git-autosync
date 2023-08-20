@@ -1,0 +1,70 @@
+#!/bin/bash
+
+set -e
+
+CONFDIR=$(git-cloud confdir)
+source "${CONFDIR}/config"
+
+if [ "$1" == "describe" ]; then
+   echo "Show the difference between the working tree and the latest cloud checkpoint(s)."
+   exit 0
+elif [ "$1" == "help" ]; then
+    echo
+    echo "Usage: git cloud status [--no-fetch] [--all]"
+    echo
+    echo "Show the difference between the working tree and the latest cloud checkpoint."
+    echo ""
+    echo "Options:"
+    echo "  --no-fetch: base output on what is already known about the"
+    echo "              cloud remote without starting with a fetch operation."
+    echo
+    echo " --all: show the difference to all cloud checkpoints"
+    echo
+    exit 0
+fi
+
+FETCH=true
+ALL=false
+for OPT in "$@"; do
+    if [ "$OPT" == "--no-fetch" ]; then
+        FETCH=false
+    elif [ "$OPT" == "--all" ]; then
+        ALL=true
+    fi
+done
+
+MAIN_GIT_DIR=$(git rev-parse --git-dir)
+CLOUD_GIT_DIR="${MAIN_GIT_DIR}/worktrees/cloud"
+BRANCH="${GIT_CLOUD_SNAPSHOT_BRANCH_PREFIX}-$(hostname)"
+LOCAL_BRANCH=$(git rev-parse --abbrev-ref main-worktree/HEAD)
+
+if [ "$FETCH" == "true" ]; then
+    git fetch "${GIT_CLOUD_REMOTE_NAME}"
+fi
+
+git --git-dir "${CLOUD_GIT_DIR}" add -A
+
+if [ "$ALL" == "false" ]; then
+    git --git-dir "${CLOUD_GIT_DIR}" diff --cached --stat .
+    exit 0
+fi
+
+echo "== Cloud checkpoint diffs (use git cloud apply <branch name>)"
+
+for BRANCH in $(git branch -r -l "${GIT_CLOUD_REMOTE_NAME}/${GIT_CLOUD_SNAPSHOT_BRANCH_PREFIX}-*"); do
+    BASE=$(basename "$BRANCH")
+    #RELATIVE=$(git rev-list --left-right --count "HEAD...${BRANCH}")
+    LAST_MSG=$(git log "${BRANCH}" -1 --pretty=%B)
+    if [ "${LAST_MSG#git-cloud}" != "${LAST_MSG}" ]; then
+        LAST_BRANCH="[$(cut -d\  -f4 <<<"$LAST_MSG")]"
+        TIMESTAMP="at $(cut -d\  -f5- <<<"$LAST_MSG")"
+    else
+        LAST_BRANCH="[??] (msg: $(head -n 1 <<<"$LAST_MSG"))"
+        TIMESTAMP=""
+    fi
+    printf "= %s from %s %s\n" "$BASE" "$LAST_BRANCH" "$TIMESTAMP"
+    git diff --name-status "${BRANCH}"
+    printf "\n"
+done
+
+

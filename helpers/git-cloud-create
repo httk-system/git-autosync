@@ -1,0 +1,36 @@
+#!/bin/bash
+
+set -e
+
+CONFDIR=$(git-cloud confdir)
+source "${CONFDIR}/config"
+
+if [ "$1" == "describe" ]; then
+   echo "Create a new cloud repo and clone it into the local directory."
+   exit 0
+elif [ "$1" == "help" -o "$#" -ne "1" ]; then
+    echo
+    echo "Usage: git cloud create <remote>"
+    echo
+    echo "Create a new cloud repo and clone it into the local directory."
+    echo ""
+    exit 0
+fi
+
+REMOTE="$1"
+
+if [ "${REMOTE%.git}" == "${REMOTE}" ]; then
+    BARE_REMOTE="${REMOTE}.git"
+    REMOTE="${REMOTE}"
+else
+    BARE_REMOTE="${REMOTE}"
+    REMOTE="${REMOTE%.git}"
+fi
+LOCAL="$(basename "$REMOTE")"
+
+RHOST="${BARE_REMOTE%%:*}"
+RPATH="${BARE_REMOTE#*:}"
+
+ssh "$RHOST" bash -c "echo -n \"\"; mkdir -p \"$RPATH\" && cd \"$RPATH\" && git init --bare --initial-branch=main ."
+
+git cloud clone "$BARE_REMOTE"

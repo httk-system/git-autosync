@@ -1,0 +1,48 @@
+#!/bin/bash
+
+set -e
+
+CONFDIR=$(git-cloud confdir)
+source "${CONFDIR}/config"
+
+if [ "$1" == "describe" ]; then
+   echo "Create snapshots of all repos in a repotree."
+   exit 0
+elif [ "$1" == "help" ]; then
+    echo
+    echo "Usage: git cloud snaptree"
+    echo
+    echo "Create snapshots of all repos in a repotree."
+    echo
+    exit 0
+fi
+
+check_key() {
+    SEARCH=$(ssh-add -L | grep " ${1//./\\\.}"'$')
+    if [ -z "$SEARCH" ]; then
+        return 0
+    else
+        return 1
+    fi
+}
+
+echo "== Loaded keys"
+ssh-add -l
+
+for PUBKEY in "$GIT_CLOUD_SSHDIR"/*.pub; do
+    PRIVKEY=$(basename "$PUBKEY" .pub)
+    if [ -z "$PRIVKEY" -o "$PRIVKEY" == "*" ]; then
+       continue
+    fi
+    if check_key "$GIT_CLOUD_SSHDIR/$PRIVKEY"; then
+        echo "== Adding key: $PRIVKEY"
+        ssh-add "$GIT_CLOUD_SSHDIR/$PRIVKEY"
+    fi
+done
+
+echo "== Looping through all repos"
+find . -name ".git" -prune | while read LINE; do
+    DIR=$(dirname "$LINE")
+    echo "= Syncing: $DIR"
+    git -C "$DIR" cloud snapshot
+done

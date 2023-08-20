@@ -1,0 +1,265 @@
+#!/bin/bash
+
+set -e
+
+CONFDIR=$(git-cloud confdir)
+source "${CONFDIR}/config"
+
+if [ "$1" == "describe" ]; then
+    echo "Completely align a local repotree to a cloud repotree."
+    exit 0
+elif [ "$1" == "help" ]; then
+    echo
+    echo "Usage: git-cloud sync [--cs-ask|cs-auto|--cs-off] <remote path>"
+    echo
+    echo "Completely align the local repotree to a cloud repotree."
+    echo
+    echo
+    echo "  Give <remote path>, e.g., user@example.com:path/to/repos to find all git repos under that path"
+    echo "  and clone them under the present path. When doing this, the command also searches through the"
+    echo "  current working directory, and if there are already cloned matching repositories, they are"
+    echo "  moved into place to match the remote directory structure."
+    echo ""
+    echo "  Parameters:"
+    echo "    --cs-ask (default): set up ssh connection sharing, but ask each time it is used (safer on multiuser machines)"
+    echo "    --cs-auto: set up ssh connection sharing, and skip passwords (unsafe if someone else can access the socket)."
+    echo "    --cs-off: don't set up ssh connection sharing"
+    echo ""
+    exit 0
+fi
+
+CONNSHARE="ask"
+if [ "$1" == "--cs-ask" ]; then
+    CONNSHARE="ask"
+    shift 1
+elif [ "$1" == "--cs-auto" ]; then
+    CONNSHARE="auto"
+    shift 1
+elif [ "$1" == "--cs-off" ]; then
+    CONNSHARE="off"
+    shift 1
+fi
+
+REMOTE="$1"
+RHOST="${REMOTE%:*}"
+RPATH="${REMOTE##*:}"
+
+if [ ! -e ./.git-cloud-root ]; then
+    echo ""
+    echo "As a saftey feature, git-cloud sync requires specific hidden files"
+    echo "to exist in both the source and destination directories it operates on."
+    echo "This ensures it is not accidentally invoked on the wrong directoires"
+    echo ""
+    echo "The local .git-cloud-root file is missing."
+    echo ""
+    echo "Verify that you are in the right directory, create an empty .git-cloud-root and try again."
+    echo ""
+    exit 1
+fi
+
+echo
+echo "== Gathering local repos"
+
+GIT_IDS=$(find . -not \( -path ./Trash -prune \) -name ".git" -prune | while read LINE; do
+              if [ -e "${LINE}/.gituuid" ]; then
+                  ID="$(cat "${LINE}/.gituuid")"
+              else
+                  ID="$(git --git-dir "${LINE}" rev-list --parents HEAD | tail -1)"
+              fi
+              LPATH="$(dirname "$LINE")"
+              echo "$ID" "${LPATH#./}"
+          done)
+
+if [ "$CONNSHARE" == "auto" -o "$CONNSHARE" == "ask" ]; then
+
+  echo "== Setting up ssh connection sharing to remote (handle auth if asked)"
+
+  function trap_exit {
+      echo
+      echo "== Cleaning up ssh connection sharing socket"
+      if [ -e "${GIT_CLOUD_SSHDIR}/connshare.socket" ]; then
+          ssh -O exit -S "${GIT_CLOUD_SSHDIR}/connshare.socket" "$RHOST" hostname
+      fi
+      rm -f "${GIT_CLOUD_SSHDIR}/connshare.socket"
+  }
+  trap trap_exit EXIT
+
+  trap_ctrlc() {
+    kill -HUP $$
+  }
+  trap trap_ctrlc INT
+
+  if [ -e "${GIT_CLOUD_SSHDIR}/connshare.socket" ]; then
+      ssh -O exit -S "${GIT_CLOUD_SSHDIR}/connshare.socket" "$RHOST" hostname
+      rm -f "${GIT_CLOUD_SSHDIR}/connshare.socket"
+  fi
+
+  if [ "$CONNSHARE" == "auto" ]; then
+      ssh -M -S "${GIT_CLOUD_SSHDIR}/connshare.socket" -o "ControlPersist=2h" "$RHOST" true
+  else
+      ssh -S "${GIT_CLOUD_SSHDIR}/connshare.socket" -o "ControlPersist=2h" -o "ControlMaster=autoask" "$RHOST" true
+  fi
+
+  if ! ssh -S "${GIT_CLOUD_SSHDIR}/connshare.socket" -O check hostname; then
+      echo "Error: failed to open ssh connection with connection sharing to $RHOST"
+      exit 1
+  fi
+
+  export GIT_SSH_COMMAND="ssh -S '${GIT_CLOUD_SSHDIR}/connshare.socket'"
+  exec_ssh() {
+      ssh -S "${GIT_CLOUD_SSHDIR}/connshare.socket" "$@"
+  }
+else
+  exec_ssh() {
+      ssh "$@"
+  }
+fi
+
+echo
+echo "== Gathering remote repos"
+
+GIT_SRC_IDS=$(exec_ssh -S "${GIT_CLOUD_SSHDIR}/connshare.socket" "$RHOST" bash -c 'true; set -e; cd "'"$RPATH"'"; if [ ! -e ./.git-cloud-remote-root ]; then echo "SAFTEY CHECK FAIL"; exit 0; fi; find . -type d -not \( -path ./Trash -prune \) -name "*.git" -prune | while read LINE; do
+                  if git --git-dir "${LINE}" show HEAD:.gituuid >& /dev/null; then
+                      ID="$(git --git-dir "${LINE}" show HEAD:.gituuid)"
+                  else
+                      ID="$(git --git-dir "${LINE}" rev-list --parents HEAD | tail -1)"
+                  fi
+                  RPATH="${LINE%.git}"
+                  echo "$ID" "${RPATH#./}"
+done')
+
+if grep -q '^SAFTEY CHECK FAIL$' <<< "$GIT_MOVE_COMMANDS"; then
+    echo ""
+    echo "As a saftey feature, git cloud sync requires specific hidden files"
+    echo "to exist in both the source and destination directories it operates on."
+    echo "This ensures it is not accidentally invoked on the wrong directoires"
+    echo ""
+    echo "The remote .git-cloud-remote-root file is missing."
+    echo ""
+    echo "Verify that you giving the right remote path, login on that server and create an empty .git-cloud-remote-root, and try again."
+    echo ""
+    exit 1
+fi
+
+echo
+echo "= Local repo ids"
+echo "$GIT_IDS"
+echo
+echo "= Remote repo ids"
+echo "$GIT_SRC_IDS"
+echo
+
+CONFIRM_MOVE() {
+    read -u 3 -p "= Confirm move $1 -> $2 [y/n]?: " CONFIRM
+    if [ "$CONFIRM" != "y" ]; then
+        echo "User stop." >&2
+        exit 1
+    else
+        DIRNAME=$(dirname "$2")
+        mkdir -p "$DIRNAME"
+        mv "$1" "$2"
+    fi
+}
+
+echo
+echo "== Processing local repos"
+
+exec 3<&0
+while IFS= read -r LINE; do
+    ID=$(cut -d ' ' -f1 <<< "$LINE")
+    LPATH=$(cut -d ' ' -f2- <<< "$LINE")
+    MATCH=$(grep "$ID" <<< "$GIT_SRC_IDS" | cut -d' ' -f2-);
+    if [ -n "$MATCH" ]; then
+        if [ -e "$MATCH" ]; then
+            DEST_ID=$(if [ -e "${LPATH}/.gituuid" ]; then echo "$(cat "${LPATH}/.gituuid")"; else echo "$(git --git-dir "$LPATH/.git" rev-list --parents HEAD | tail -1)"; fi)
+            if [ "$DEST_ID" == "$ID" ]; then
+                echo "= Correct repo already in place: $LPATH"
+            else
+                echo "= Wrong repo in the way, trashing: $LPATH"
+                CONFIRM_MOVE "$MATCH" "Trash/$(basename "$MATCH").$RANDOM"
+                if [ -e "${LPATH}.ignore" ]; then
+                    echo "= Repo .ignore file exist, trashing existing repo at: $LPATH"
+                    CONFIRM_MOVE "$LPATH" "Trash/$(basename "$LPATH").$RANDOM"
+                else
+                    echo "= Moving correct repo into place: $LPATH -> $MATCH"
+                    CONFIRM_MOVE "$LPATH" "$MATCH"
+                fi
+            fi
+        else
+            if [ -e "${LPATH}.ignore" ]; then
+                echo "= Repo .ignore file exist, trashing existing repo at: $LPATH"
+                CONFIRM_MOVE "$LPATH" "Trash/$(basename "$LPATH").$RANDOM"
+            else
+                echo "= Moving correct repo into place: $LPATH -> $MATCH"
+                CONFIRM_MOVE "$LPATH" "$MATCH"
+            fi
+        fi
+    else
+        echo "= Trashing local repo not present in remote: $LPATH"
+        CONFIRM_MOVE "$LPATH" "Trash/$(basename "$LPATH").$RANDOM"
+    fi
+done <<< "$GIT_IDS"
+
+CONFIRM_SETURL() {
+    if git --git-dir "$1/.git" remote get-url "$2" >& /dev/null; then
+        CURRENT=$(git --git-dir "$1/.git" remote get-url "$2")
+        if [ "$CURRENT" != "$3" ]; then
+            read -u 3 -p "= Confirm change url on '$1' branch '$2' from ${CURRENT} -> '$3' [y/n]?: " CONFIRM
+            if [ "$CONFIRM" != "y" ]; then
+                echo "Remote left alone." >&2
+            else
+                git --git-dir "$1/.git" remote set-url "$2" "$3"
+            fi
+        fi
+    else
+        read -u 3 -p "= Confirm new remote on '$1' branch '$2': '$3' [y/n]?: " CONFIRM
+        if [ "$CONFIRM" != "y" ]; then
+            echo "Remote not set." >&2
+        else
+            git --git-dir "$1/.git" remote add "$2" "$3"
+        fi
+    fi
+}
+
+CONFIRM_CLONE() {
+    read -u 3 -p "= Confirm clone '$1' into '$2' [y/n]?: " CONFIRM
+    if [ "$CONFIRM" != "y" ]; then
+        echo "Clone skipped." >&2
+    else
+        git-cloud-clone "${1}" "" "" "${2}"
+    fi
+}
+
+echo
+echo "== Processing remote repos"
+
+while IFS= read -r LINE; do
+    ID=$(cut -d ' ' -f1 <<< "$LINE")
+    LPATH=$(cut -d ' ' -f2- <<< "$LINE")
+    if [ -e "$LPATH" ]; then
+        DEST_ID=$(if [ -e "${LPATH}/.gituuid" ]; then echo "$(cat "${LPATH}/.gituuid")"; else echo "$(git --git-dir "$LPATH/.git" rev-list --parents HEAD | tail -1)"; fi)
+        if [ "$DEST_ID" == "$ID" ]; then
+            ORIGIN=$(git --git-dir "$LPATH/.git" remote get-url origin)
+            if [ "${ORIGIN#$REMOTE}" != "${ORIGIN}" ]; then
+                CONFIRM_SETURL "$LPATH" origin "${REMOTE}/${LPATH}"
+            fi
+            if git --git-dir "$LPATH/.git" remote get-url "${GIT_CLOUD_REMOTE_NAME}" >& /dev/null; then
+                AUTOSYNC=$(git --git-dir "$LPATH/.git" remote get-url "${GIT_CLOUD_REMOTE_NAME}")
+            else
+                AUTOSYNC="$REMOTE:[unset]"
+            fi
+            if [ "${AUTOSYNC#$REMOTE}" != "${AUTOSYNC}" ]; then
+                CONFIRM_SETURL "$LPATH" "${GIT_CLOUD_REMOTE_NAME}" "${REMOTE}/${LPATH}"
+            fi
+        else
+            echo "Unexpected path error. The path:"
+            echo "  $LPATH"
+            echo "Contains a repo that does not match the destination repo, yet it was not moved away."
+            exit 1
+        fi
+    else
+        if [ ! -e "${LPATH}.ignore" ]; then
+            CONFIRM_CLONE "${REMOTE}/${LPATH}" "${LPATH}"
+        fi
+    fi
+done <<< "$GIT_SRC_IDS"

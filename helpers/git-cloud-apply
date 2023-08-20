@@ -1,0 +1,48 @@
+#!/bin/bash
+
+set -e
+
+CONFDIR=$(git-cloud confdir)
+source "${CONFDIR}/config"
+
+if [ "$1" == "describe" ]; then
+   echo "Apply a cloud checkpoint onto the current repo."
+   exit 0
+elif [ "$1" == "help" ]; then
+    echo
+    echo "Usage: git cloud apply [--all | <cloud branch>]"
+    echo
+    echo "Apply a cloud checkpoint onto the current repo."
+    echo
+    exit 0
+fi
+
+if [ "$1" != "--all" ]; then
+
+    BRANCH="$1"
+
+    echo "== Note: if the apply aborts because it would overwrite untracked files, stage them (git add -A) and re-run the apply. You can then unstage them again after the apply if needed."
+    echo ""
+
+    git merge "${GIT_CLOUD_REMOTE_NAME}/${BRANCH}" --squash --allow-unrelated-histories --autostash
+
+    exit 0
+
+fi
+
+LOCAL_BRANCH=$(git rev-parse --abbrev-ref HEAD)
+
+for BRANCH in $(git branch -r -l "${GIT_CLOUD_REMOTE_NAME}/${GIT_CLOUD_SNAPSHOT_BRANCH_PREFIX}-*"); do
+    BASE="$(basename "$BRANCH")"
+    if [ "$BASE" == "${GIT_CLOUD_SNAPSHOT_BRANCH_PREFIX}-$(hostname)" ]; then
+        echo "= Skipping $BASE since it is the local sync branch."
+        continue
+    fi
+    LAST_LOG="$(git log ${BRANCH} -1 --pretty=%B)"
+    LAST_BRANCH="$(cut -d\  -f4 <<<"$LAST_LOG")"
+    if [ "$LOCAL_BRANCH" == "$LAST_BRANCH" ]; then
+        git cloud apply "$BASE"
+    else
+        echo "= Skipping $BASE since it was made on a diffent branch: $LAST_BRANCH /= $LOCAL_BRANCH"
+    fi
+done
