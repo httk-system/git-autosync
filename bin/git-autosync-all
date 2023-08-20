@@ -5,18 +5,81 @@ set -e
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &> /dev/null && pwd -P)
 
 if [ "$#" -lt "1" ]; then
-    echo "Usage: $0 <remote path>"
+    echo "Usage: $0 [--cs-ask|cs-auto|--cs-off] <remote path>"
     echo
     echo "  Give <remote path>, e.g., user@example.com:path/to/repos to find all git repos under that path"
     echo "  and clone them under the present path. When doing this, the command also searches through the"
     echo "  current working directory, and if there are already cloned matching repositories, they are"
     echo "  moved into place to match the remote directory structure."
+    echo ""
+    echo "  Parameters:"
+    echo "    --cs-ask: set up ssh connection sharing, but ask each time it is used (safer on multiuser machines) [default]"
+    echo "    --cs-auto: set up ssh connection sharing, and skip passwords (somewhat unsafe if someone can access the socket)."
+    echo "    --cs-off: don't set up ssh connection sharing"
+    echo ""
     exit 1
+fi
+
+CONNSHARE="ask"
+if [ "$1" == "--cs-ask" ]; then
+    CONNSHARE="ask"
+    shift 1
+elif [ "$1" == "--cs-auto" ]; then
+    CONNSHARE="auto"
+    shift 1
+elif [ "$1" == "--cs-off" ]; then
+    CONNSHARE="off"
+    shift 1
 fi
 
 REMOTE="$1"
 RHOST="${REMOTE%:*}"
 RPATH="${REMOTE##*:}"
+
+if [ "$CONNSHARE" == "auto" -o "$CONNSHARE" == "ask" ]; then
+
+  echo "== Setting up ssh connection sharing to remote (handle auth if asked)"
+
+  function trap_exit {
+      echo
+      echo "== Cleaning up ssh connection sharing socket"
+      if [ -e "$HOME/.ssh/git-autosync/connshare.socket" ]; then
+          ssh -O exit -S "$HOME/.ssh/git-autosync/connshare.socket" "$RHOST" hostname
+      fi
+      rm -f "$HOME/.ssh/git-autosync/connshare.socket"
+  }
+  trap trap_exit EXIT
+
+  trap_ctrlc() {
+    kill -HUP $$
+  }
+  trap trap_ctrlc INT
+
+  if [ -e "$HOME/.ssh/git-autosync/connshare.socket" ]; then
+      ssh -O exit -S "$HOME/.ssh/git-autosync/connshare.socket" "$RHOST" hostname
+      rm -f "$HOME/.ssh/git-autosync/connshare.socket"
+  fi
+
+  if [ "$CONNSHARE" == "auto" ]; then
+      ssh -M -S "$HOME/.ssh/git-autosync/connshare.socket" -o "ControlPersist=2h" "$RHOST" true
+  else
+      ssh -S "$HOME/.ssh/git-autosync/connshare.socket" -o "ControlPersist=2h" -o "ControlMaster=autoask" "$RHOST" true
+  fi
+
+  if ! ssh -S "$HOME/.ssh/git-autosync/connshare.socket" -O check hostname; then
+      echo "Error: failed to open ssh connection with connection sharing to $RHOST"
+      exit 1
+  fi
+
+  export GIT_SSH_COMMAND="ssh -S '$HOME/.ssh/git-autosync/connshare.socket'"
+  exec_ssh() {
+      ssh -S "$HOME/.ssh/git-autosync/connshare.socket" "$@"
+  }
+else
+  exec_ssh() {
+      ssh "$@"
+  }
+fi
 
 if [ ! -e ./.git-autosync-root ]; then
     echo ""
@@ -31,7 +94,10 @@ if [ ! -e ./.git-autosync-root ]; then
     exit 1
 fi
 
-GIT_IDS=$(find . -type d -name ".git" -prune | while read LINE; do
+echo
+echo "== Gathering local repos"
+
+GIT_IDS=$(find . -not \( -path ./Trash -prune \) -name ".git" -prune | while read LINE; do
               if [ -e "${LINE}/.gituuid" ]; then
                   ID="$(cat "${LINE}/.gituuid")"
               else
@@ -41,7 +107,10 @@ GIT_IDS=$(find . -type d -name ".git" -prune | while read LINE; do
               echo "$ID" "${LPATH#./}"
           done)
 
-GIT_SRC_IDS=$(ssh "$RHOST" bash -c 'true; set -e; cd "'"$RPATH"'"; if [ ! -e ./.git-autosync-repos-root ]; then echo "SAFTEY CHECK FAIL"; exit 0; fi; find . -type d -name "*.git" -prune | while read LINE; do
+echo
+echo "== Gathering remote repos"
+
+GIT_SRC_IDS=$(exec_ssh -S ~/.ssh/git-autosync/connshare.socket "$RHOST" bash -c 'true; set -e; cd "'"$RPATH"'"; if [ ! -e ./.git-autosync-repos-root ]; then echo "SAFTEY CHECK FAIL"; exit 0; fi; find . -type d -not \( -path ./Trash -prune \) -name "*.git" -prune | while read LINE; do
                   if git --git-dir "${LINE}" show HEAD:.gituuid >& /dev/null; then
                       ID="$(git --git-dir "${LINE}" show HEAD:.gituuid)"
                   else
@@ -65,17 +134,15 @@ if grep -q '^SAFTEY CHECK FAIL$' <<< "$GIT_MOVE_COMMANDS"; then
 fi
 
 echo
-echo "--- LOCAL REPO IDS ---"
+echo "= Local repo ids"
 echo "$GIT_IDS"
-echo "---"
 echo
-echo "--- REMOTE REPO IDS ---"
+echo "= Remote repo ids"
 echo "$GIT_SRC_IDS"
-echo "---"
 echo
 
 CONFIRM_MOVE() {
-    read -u 3 -p "== Confirm move $1 -> $2 [y/n]?: " CONFIRM
+    read -u 3 -p "= Confirm move $1 -> $2 [y/n]?: " CONFIRM
     if [ "$CONFIRM" != "y" ]; then
         echo "User stop." >&2
         exit 1
@@ -86,6 +153,9 @@ CONFIRM_MOVE() {
     fi
 }
 
+echo
+echo "== Processing local repos"
+
 exec 3<&0
 while IFS= read -r LINE; do
     ID=$(cut -d ' ' -f1 <<< "$LINE")
@@ -95,48 +165,56 @@ while IFS= read -r LINE; do
         if [ -e "$MATCH" ]; then
             DEST_ID=$(if [ -e "${LPATH}/.gituuid" ]; then echo "$(cat "${LPATH}/.gituuid")"; else echo "$(git --git-dir "$LPATH/.git" rev-list --parents HEAD | tail -1)"; fi)
             if [ "$DEST_ID" == "$ID" ]; then
-                echo "== Repo already in place: $LPATH"
+                echo "= Correct repo already in place: $LPATH"
             else
-                echo "TWO"
+                echo "= Wrong repo in the way, trashing: $LPATH"
                 CONFIRM_MOVE "$MATCH" "Trash/$(basename "$MATCH").$RANDOM"
-                if [ -e "${LPATH}.disabled" ]; then
-                    echo "THREE"
+                if [ -e "${LPATH}.ignore" ]; then
+                    echo "= Repo .ignore file exist, trashing existing repo at: $LPATH"
                     CONFIRM_MOVE "$LPATH" "Trash/$(basename "$LPATH").$RANDOM"
                 else
+                    echo "= Moving correct repo into place: $LPATH -> $MATCH"
                     CONFIRM_MOVE "$LPATH" "$MATCH"
                 fi
             fi
         else
-            if [ -e "${LPATH}.disabled" ]; then
-                echo "FOUR"
+            if [ -e "${LPATH}.ignore" ]; then
+                echo "= Repo .ignore file exist, trashing existing repo at: $LPATH"
                 CONFIRM_MOVE "$LPATH" "Trash/$(basename "$LPATH").$RANDOM"
             else
+                echo "= Moving correct repo into place: $LPATH -> $MATCH"
                 CONFIRM_MOVE "$LPATH" "$MATCH"
             fi
         fi
     else
-        echo "FIVE"
+        echo "= Trashing local repo not present in remote: $LPATH"
         CONFIRM_MOVE "$LPATH" "Trash/$(basename "$LPATH").$RANDOM"
     fi
 done <<< "$GIT_IDS"
 
 CONFIRM_SETURL() {
-    read -u 3 -p "== Confirm set-url on '$1' branch '$2' to '$3' [y/n]?: " CONFIRM
-    if [ "$CONFIRM" != "y" ]; then
-        echo "Remote left alone." >&2
-    else
-        git --git-dir "$1/.git" remote set-url "$2" "$3"
+    CURRENT=$(git --git-dir "$1/.git" remote get-url "$2")
+    if [ "$CURRENT" != "$3" ]; then
+        read -u 3 -p "= Confirm change url on '$1' branch '$2' from ${CURRENT} -> '$3' [y/n]?: " CONFIRM
+        if [ "$CONFIRM" != "y" ]; then
+            echo "Remote left alone." >&2
+        else
+            git --git-dir "$1/.git" remote set-url "$2" "$3"
+        fi
     fi
 }
 
 CONFIRM_CLONE() {
-    read -u 3 -p "== Confirm clone '$1' into '$2' [y/n]?: " CONFIRM
+    read -u 3 -p "= Confirm clone '$1' into '$2' [y/n]?: " CONFIRM
     if [ "$CONFIRM" != "y" ]; then
         echo "Clone skipped." >&2
     else
         "${SCRIPT_DIR}"/git-autosync-clone "${1}" "" "" "${2}"
     fi
 }
+
+echo
+echo "== Processing remote repos"
 
 while IFS= read -r LINE; do
     ID=$(cut -d ' ' -f1 <<< "$LINE")
@@ -159,7 +237,7 @@ while IFS= read -r LINE; do
             exit 1
         fi
     else
-        if [ -e "${LPATH}.disabled" ]; then
+        if [ ! -e "${LPATH}.ignore" ]; then
             CONFIRM_CLONE "${REMOTE}/${LPATH}" "${LPATH}"
         fi
     fi
