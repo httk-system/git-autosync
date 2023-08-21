@@ -18,7 +18,10 @@ mkdir -p ~/Tools
 cd ~/Tools
 git clone https://github.com/httk-system/git-cloud.git
 ```
-Add ~/Tools/git-cloud/bin to your path (e.g., in `.bashrc`).
+Add ~/Tools/git-cloud/bin to your path, e.g., by inserting this line at the end of your `~/.bashrc`:
+```
+export PATH=$PATH:$(find -L ~/Tools -type d -name "bin" -prune | tr "\n" ":")
+```
 
 If you do not want to set up a public ssh key for use with git-cloud, you can do so with:
 ```
