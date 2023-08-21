@@ -5,42 +5,63 @@ set -e
 CONFDIR=$(git-cloud confdir)
 source "${CONFDIR}/config"
 
+CONNSHARE="ask"
+CONFIRMATION="yes"
+while [ 1 == 1 ]; do
+    if [ "$1" == "--cs-ask" ]; then
+        CONNSHARE="ask"
+        shift 1
+    elif [ "$1" == "--cs-auto" ]; then
+        CONNSHARE="auto"
+        shift 1
+    elif [ "$1" == "--cs-off" ]; then
+        CONNSHARE="off"
+        shift 1
+    elif [ "$1" == "-Y" ]; then
+        CONFIRMATION="no"
+        CONNSHARE="auto"
+        shift 1
+    else
+        break
+    fi
+done
+
 if [ "$1" == "describe" ]; then
     echo "Completely align a local repotree to a cloud repotree."
     exit 0
 elif [ "$1" == "help" ]; then
     echo
-    echo "Usage: git-cloud sync [--cs-ask|cs-auto|--cs-off] <remote path>"
+    echo "Usage: git-cloud sync [-Y] [--cs-ask|cs-auto|--cs-off] [remote path]"
     echo
     echo "Completely align the local repotree to a cloud repotree."
     echo
+    echo "Give <remote path>, e.g., user@example.com:path/to/repos to find all git repos under that path"
+    echo "and clone them under the present path. When doing this, the command also searches through the"
+    echo "current working directory, and if there are already cloned matching repositories, they are"
+    echo "moved into place to match the remote directory structure."
     echo
-    echo "  Give <remote path>, e.g., user@example.com:path/to/repos to find all git repos under that path"
-    echo "  and clone them under the present path. When doing this, the command also searches through the"
-    echo "  current working directory, and if there are already cloned matching repositories, they are"
-    echo "  moved into place to match the remote directory structure."
+    echo "If <remote path> is not given, then the file .git-cloud-root is read"
+    echo "for this information instead."
     echo ""
-    echo "  Parameters:"
+    echo "Parameters:"
+    echo
+    echo "    -Y: ask for no confirmations whatsoever, implies --cs-auto"
+    echo
     echo "    --cs-ask (default): set up ssh connection sharing, but ask each time it is used (safer on multiuser machines)"
+    echo
     echo "    --cs-auto: set up ssh connection sharing, and skip passwords (unsafe if someone else can access the socket)."
+    echo
     echo "    --cs-off: don't set up ssh connection sharing"
     echo ""
     exit 0
 fi
 
-CONNSHARE="ask"
-if [ "$1" == "--cs-ask" ]; then
-    CONNSHARE="ask"
-    shift 1
-elif [ "$1" == "--cs-auto" ]; then
-    CONNSHARE="auto"
-    shift 1
-elif [ "$1" == "--cs-off" ]; then
-    CONNSHARE="off"
-    shift 1
+if [ -z "$1" -a -e ./.git-cloud-root ]; then
+    REMOTE=$(cat ./.git-cloud-root)
+else
+    REMOTE="$1"
 fi
 
-REMOTE="$1"
 RHOST="${REMOTE%:*}"
 RPATH="${REMOTE##*:}"
 
@@ -150,7 +171,11 @@ echo "$GIT_SRC_IDS"
 echo
 
 CONFIRM_MOVE() {
-    read -u 3 -p "= Confirm move $1 -> $2 [y/n]?: " CONFIRM
+    if [ "$CONFIRMATION" != "no" ]; then
+        read -u 3 -p "= Confirm move $1 -> $2 [y/n]?: " CONFIRM
+    else
+        CONFIRM="y"
+    fi
     if [ "$CONFIRM" != "y" ]; then
         echo "User stop." >&2
         exit 1
@@ -204,7 +229,11 @@ CONFIRM_SETURL() {
     if git --git-dir "$1/.git" remote get-url "$2" >& /dev/null; then
         CURRENT=$(git --git-dir "$1/.git" remote get-url "$2")
         if [ "$CURRENT" != "$3" ]; then
-            read -u 3 -p "= Confirm change url on '$1' branch '$2' from ${CURRENT} -> '$3' [y/n]?: " CONFIRM
+            if [ "$CONFIRMATION" != "no" ]; then
+                read -u 3 -p "= Confirm change url on '$1' branch '$2' from ${CURRENT} -> '$3' [y/n]?: " CONFIRM
+            else
+                CONFIRM="y"
+            fi
             if [ "$CONFIRM" != "y" ]; then
                 echo "Remote left alone." >&2
             else
@@ -212,7 +241,11 @@ CONFIRM_SETURL() {
             fi
         fi
     else
-        read -u 3 -p "= Confirm new remote on '$1' branch '$2': '$3' [y/n]?: " CONFIRM
+        if [ "$CONFIRMATION" != "no" ]; then
+            read -u 3 -p "= Confirm new remote on '$1' branch '$2': '$3' [y/n]?: " CONFIRM
+        else
+            CONFIRM="y"
+        fi
         if [ "$CONFIRM" != "y" ]; then
             echo "Remote not set." >&2
         else
@@ -222,7 +255,11 @@ CONFIRM_SETURL() {
 }
 
 CONFIRM_CLONE() {
-    read -u 3 -p "= Confirm clone '$1' into '$2' [y/n]?: " CONFIRM
+    if [ "$CONFIRMATION" != "no" ]; then
+        read -u 3 -p "= Confirm clone '$1' into '$2' [y/n]?: " CONFIRM
+    else
+        CONFIRM="y"
+    fi
     if [ "$CONFIRM" != "y" ]; then
         echo "Clone skipped." >&2
     else
