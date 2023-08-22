@@ -88,7 +88,7 @@ GIT_IDS=$(find . -not \( -path ./Trash -prune \) -name ".git" -prune | while rea
                   ID="$(git --git-dir "${LINE}" rev-list --parents HEAD | tail -1)"
               fi
               LPATH="$(dirname "$LINE")"
-              echo "$ID" "${LPATH#./}"
+              echo "${ID}|${LPATH#./}"
           done)
 
 if [ "$CONNSHARE" == "auto" -o "$CONNSHARE" == "ask" ]; then
@@ -146,7 +146,18 @@ GIT_SRC_IDS=$(exec_ssh -S "${GIT_CLOUD_SSHDIR}/connshare.socket" "$RHOST" bash -
                       ID="$(git --git-dir "${LINE}" rev-list --parents HEAD | tail -1)"
                   fi
                   RPATH="${LINE%.git}"
-                  echo "$ID" "${RPATH#./}"
+                  REMOTES_DATA="$(git --git-dir "${LINE}" remote -v)"
+                  REMOTES="$(echo "$REMOTES_DATA" | cut -f1 | sort | uniq)"
+                  REMOTE_INFO=""
+                  for REMOTE in $REMOTES; do
+                    FETCH_URL="$(awk "\$1 == \"$REMOTE\" && \$3 == \"(fetch)\" {print \$2}" <<<"$REMOTES_DATA")"
+                    PUSH_URL="$(awk "\$1 == \"$REMOTE\" && \$3 == \"(push)\" {print \$2}" <<<"$REMOTES_DATA")"
+                    if [ -n "${REMOTE_INFO}" ]; then
+                      REMOTE_INFO="${REMOTE_INFO}^"
+                    fi
+                    REMOTE_INFO="${REMOTE_INFO}${REMOTE} ${FETCH_URL} ${PUSH_URL}"
+                  done
+                  echo "${ID}|${RPATH#./}|$REMOTE_INFO"
 done')
 
 if grep -q '^SAFTEY CHECK FAIL$' <<< "$GIT_MOVE_COMMANDS"; then
@@ -191,9 +202,9 @@ echo "== Processing local repos"
 
 exec 3<&0
 while IFS= read -r LINE; do
-    ID=$(cut -d ' ' -f1 <<< "$LINE")
-    LPATH=$(cut -d ' ' -f2- <<< "$LINE")
-    MATCH=$(grep "$ID" <<< "$GIT_SRC_IDS" | cut -d' ' -f2-);
+    ID=$(cut -d '|' -f1 <<< "$LINE")
+    LPATH=$(cut -d '|' -f2 <<< "$LINE")
+    MATCH=$(grep "$ID" <<< "$GIT_SRC_IDS" | cut -d '|' -f2);
     if [ -n "$MATCH" ]; then
         if [ -e "$MATCH" ]; then
             DEST_ID=$(if [ -e "${LPATH}/.gituuid" ]; then echo "$(cat "${LPATH}/.gituuid")"; else echo "$(git --git-dir "$LPATH/.git" rev-list --parents HEAD | tail -1)"; fi)
@@ -271,23 +282,41 @@ echo
 echo "== Processing remote repos"
 
 while IFS= read -r LINE; do
-    ID=$(cut -d ' ' -f1 <<< "$LINE")
-    LPATH=$(cut -d ' ' -f2- <<< "$LINE")
+    ID=$(cut -d '|' -f1 <<< "$LINE")
+    LPATH=$(cut -d '|' -f2 <<< "$LINE")
+    REMOTES=$(cut -d '|' -f3- <<< "$LINE" | tr '^' '\n')
     if [ -e "$LPATH" ]; then
         DEST_ID=$(if [ -e "${LPATH}/.gituuid" ]; then echo "$(cat "${LPATH}/.gituuid")"; else echo "$(git --git-dir "$LPATH/.git" rev-list --parents HEAD | tail -1)"; fi)
         if [ "$DEST_ID" == "$ID" ]; then
-            ORIGIN=$(git --git-dir "$LPATH/.git" remote get-url origin)
-            if [ "${ORIGIN#$REMOTE}" != "${ORIGIN}" ]; then
-                CONFIRM_SETURL "$LPATH" origin "${REMOTE}/${LPATH}"
+            ORIGIN_SET=false
+            while IFS= read -r LINE; do
+                if [ -z "$LINE" ]; then
+                    continue
+                fi
+                REMOTE_REMOTE=$(echo "$LINE" | cut -d ' ' -f1)
+                REMOTE_FETCH=$(echo "$LINE" | cut -d ' ' -f2)
+                REMOTE_PUSH=$(echo "$LINE" | cut -d ' ' -f3)
+                if [ "$REMOTE_REMOTE" == "cloud" ]; then
+                    continue
+                elif [ "$REMOTE_REMOTE" == "origin" ]; then
+                    ORIGIN_SET=true
+                fi
+                CONFIRM_SETURL "$LPATH" ${REMOTE_REMOTE} "${REMOTE_FETCH}" "${REMOTE_PUSH}"
+            done <<< "$REMOTES"
+            if [ "$ORIGIN_SET" == "false" ]; then
+                ORIGIN=$(git --git-dir "$LPATH/.git" remote get-url origin)
+                if [ "${ORIGIN#$REMOTE}" != "${ORIGIN}" ]; then
+                    CONFIRM_SETURL "$LPATH" origin "${REMOTE}/${LPATH}"
+                fi
             fi
-            if git --git-dir "$LPATH/.git" remote get-url "${GIT_CLOUD_REMOTE_NAME}" >& /dev/null; then
-                AUTOSYNC=$(git --git-dir "$LPATH/.git" remote get-url "${GIT_CLOUD_REMOTE_NAME}")
-            else
-                AUTOSYNC="$REMOTE:[unset]"
-            fi
-            if [ "${AUTOSYNC#$REMOTE}" != "${AUTOSYNC}" ]; then
-                CONFIRM_SETURL "$LPATH" "${GIT_CLOUD_REMOTE_NAME}" "${REMOTE}/${LPATH}"
-            fi
+            #if git --git-dir "$LPATH/.git" remote get-url "${GIT_CLOUD_REMOTE_NAME}" >& /dev/null; then
+            #    AUTOSYNC=$(git --git-dir "$LPATH/.git" remote get-url "${GIT_CLOUD_REMOTE_NAME}")
+            #else
+            #    AUTOSYNC="$REMOTE:[unset]"
+            #fi
+            #if [ "${AUTOSYNC#$REMOTE}" != "${AUTOSYNC}" ]; then
+            CONFIRM_SETURL "$LPATH" "${GIT_CLOUD_REMOTE_NAME}" "${REMOTE}/${LPATH}"
+            #fi
         else
             echo "Unexpected path error. The path:"
             echo "  $LPATH"
