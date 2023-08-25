@@ -317,6 +317,11 @@ while IFS= read -r LINE; do
             #if [ "${AUTOSYNC#$REMOTE}" != "${AUTOSYNC}" ]; then
             CONFIRM_SETURL "$LPATH" "${GIT_CLOUD_REMOTE_NAME}" "${REMOTE}/${LPATH}"
             #fi
+            MAIN_GIT_DIR=$(git -C "$LPATH" rev-parse --git-dir)
+            if [ ! -e "${MAIN_GIT_DIR}/worktrees/cloud" ]; then
+                echo "= Setting up snapshot worktree for $LPATH"
+                git -C "$LPATH" cloud snapshot
+            fi
         else
             echo "Unexpected path error. The path:"
             echo "  $LPATH"
