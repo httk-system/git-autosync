@@ -20,6 +20,6 @@ fi
 internal-git-cloud-load-keys
 
 while [ "0" == "0" ]; do
-    git cloud snaptree
+    git-cloud-snaptree
     sleep 120
 done
