@@ -23,5 +23,7 @@ echo "== Looping through all repos"
 find . -name ".git" -prune | while read LINE; do
     DIR=$(dirname "$LINE")
     echo "= Syncing: $DIR"
-    git -C "$DIR" cloud snapshot
+    ( cd "$DIR"
+      git-cloud-snapshot
+    )
 done
