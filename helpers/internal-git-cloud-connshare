@@ -1,18 +1,47 @@
-setup_cloud_connshare() {
+if [ "$CONNSHARE_SETUP_DONE" != "1" ]; then
 
-CONNSHARE="$1"
+  CONFDIR=$(git-cloud confdir)
+  source "${CONFDIR}/config"
 
-if [ "$CONNSHARE" == "auto" -o "$CONNSHARE" == "ask" ]; then
+  setup_cloud_connshare() {
 
-  echo "== Setting up ssh connection sharing to remote (handle auth if asked)"
+    RHOST="$1"
+    CONNSHARE="$2"
+
+    if [ "$CONNSHARE" == "auto" -o "$CONNSHARE" == "ask" ]; then
+
+      if ssh -S "${GIT_CLOUD_SSHDIR}/%C.cs.socket" -O check "$RHOST" >& /dev/null; then
+          return
+      fi
+
+      echo "== Setting up ssh connection sharing to remote (handle auth if asked)"
+
+      if [ "$CONNSHARE" == "auto" ]; then
+          ssh -M -S "${GIT_CLOUD_SSHDIR}/%C.cs.socket" -o "ControlPersist=2h" "$RHOST" true
+          ls "${GIT_CLOUD_SSHDIR}/"
+      else
+          ssh -MM -S "${GIT_CLOUD_SSHDIR}/%C.cs.socket" -o "ControlPersist=2h" "$RHOST" true
+      fi
+
+      if ! ssh -S "${GIT_CLOUD_SSHDIR}/%C.cs.socket" -O check "$RHOST"; then
+          echo "Error: failed to open ssh connection with connection sharing to $RHOST"
+          exit 1
+      fi
+    fi
+  }
+
+  export GIT_SSH_COMMAND="ssh -S \"${GIT_CLOUD_SSHDIR}\"/%C.cs.socket"
 
   function trap_exit {
-      echo
-      echo "== Cleaning up ssh connection sharing socket"
-      if [ -e "${GIT_CLOUD_SSHDIR}/connshare.socket" ]; then
-          ssh -O exit -S "${GIT_CLOUD_SSHDIR}/connshare.socket" "$RHOST" hostname
-      fi
-      rm -f "${GIT_CLOUD_SSHDIR}/connshare.socket"
+        echo
+        echo "== Cleaning up ssh connection sharing sockets"
+        for SOCKET in "${GIT_CLOUD_SSHDIR}"/*.cs.socket; do
+            if [ "$SOCKET" == "${GIT_CLOUD_SSHDIR}/*.cs.socket" ]; then
+                break
+            fi
+            ssh -O exit -S "${SOCKET}" dummy
+            rm -f "${SOCKET}"
+        done
   }
   trap trap_exit EXIT
 
@@ -21,31 +50,6 @@ if [ "$CONNSHARE" == "auto" -o "$CONNSHARE" == "ask" ]; then
   }
   trap trap_ctrlc INT
 
-  if [ -e "${GIT_CLOUD_SSHDIR}/connshare.socket" ]; then
-      ssh -O exit -S "${GIT_CLOUD_SSHDIR}/connshare.socket" "$RHOST" hostname
-      rm -f "${GIT_CLOUD_SSHDIR}/connshare.socket"
-  fi
-
-  if [ "$CONNSHARE" == "auto" ]; then
-      ssh -M -S "${GIT_CLOUD_SSHDIR}/connshare.socket" -o "ControlPersist=2h" "$RHOST" true
-  else
-      ssh -S "${GIT_CLOUD_SSHDIR}/connshare.socket" -o "ControlPersist=2h" -o "ControlMaster=autoask" "$RHOST" true
-  fi
-
-  if ! ssh -S "${GIT_CLOUD_SSHDIR}/connshare.socket" -O check hostname; then
-      echo "Error: failed to open ssh connection with connection sharing to $RHOST"
-      exit 1
-  fi
-
-  export GIT_SSH_COMMAND="ssh -S '${GIT_CLOUD_SSHDIR}/connshare.socket'"
-  exec_ssh() {
-      ssh -S "${GIT_CLOUD_SSHDIR}/connshare.socket" "$@"
-  }
-else
-  exec_ssh() {
-      ssh "$@"
-  }
+  export -f setup_cloud_connshare
+  export CONNSHARE_SETUP_DONE=1
 fi
-
-
-}

@@ -4,9 +4,8 @@ set -e
 
 CONFDIR=$(git-cloud confdir)
 source "${CONFDIR}/config"
-source internal-git-cloud-connshare
 
-CONNSHARE="ask"
+CONNSHARE="auto"
 while [ 1 == 1 ]; do
     if [ "$1" == "--cs-ask" ]; then
         CONNSHARE="ask"
@@ -27,7 +26,7 @@ if [ "$1" == "describe" ]; then
    exit 0
 elif [ "$1" == "help" ]; then
     echo
-    echo "Usage: git cloud pull"
+    echo "Usage: git cloud pull [--cs-ask|--cs-auto|--cs-off]"
     echo
     echo
     echo "    --cs-ask (default): set up ssh connection sharing, but ask each time it is used (safer on multiuser machines)"
@@ -41,27 +40,10 @@ elif [ "$1" == "help" ]; then
     exit 0
 fi
 
-ssh-agent bash -c '
+source internal-git-cloud-connshare
+internal-git-cloud-load-keys "$CONNSHARE"
 
-  check_key() {
-    SEARCH=$(ssh-add -L | grep " ${1//./\\\.}\$")
-    if [ -z "$SEARCH" ]; then
-        return 0
-    else
-        return 1
-    fi
-  }
-
-  for PUBKEY in "'$GIT_CLOUD_SSHDIR'"/*.pub; do
-    PRIVKEY=$(basename "$PUBKEY" .pub)
-    if check_key ~/.ssh/git-autosync/"$PRIVKEY"; then
-        echo "== Adding key: $PRIVKEY"
-        ssh-add ~/.ssh/git-autosync/"$PRIVKEY"
-    fi
-  done
-
-  find . -name ".git" -prune | while read LINE; do
-    #setup_cloud_connshare "$CONNSHARE"
+find . -name ".git" -prune | while read LINE; do
     REPOPATH=$(dirname "$LINE")
     TRACKING=$(git -C "$REPOPATH" rev-parse --abbrev-ref --symbolic-full-name @{u})
     REMOTE=$(git -C "$REPOPATH" remote get-url "${TRACKING%%/*}")
@@ -70,16 +52,5 @@ ssh-agent bash -c '
         echo "== Pulling from: $REPOPATH"
         git -C "$REPOPATH" pull
     fi
-  done
-'
-
-find . -name ".git" -prune | while read LINE; do
-  REPOPATH=$(dirname "$LINE")
-  TRACKING=$(git -C "$REPOPATH" rev-parse --abbrev-ref --symbolic-full-name @{u})
-  REMOTE=$(git -C "$REPOPATH" remote get-url "${TRACKING%%/*}")
-  CLOUD_REMOTE=$(git -C "$REPOPATH" remote get-url cloud)
-  if [ "$REMOTE" != "$CLOUD_REMOTE" ]; then
-      echo "== Pulling from: $REPOPATH"
-      git -C "$REPOPATH" pull
-  fi
 done
+

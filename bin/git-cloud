@@ -64,4 +64,6 @@ EOF
     exit 0
 fi
 
-"${HELPER_PATH}"/"git-cloud-${MODE}" "$@"
+# Make sure the helpers always run in a new ssh-agent context
+# Consider adding command line option to turn this off
+ssh-agent "${HELPER_PATH}"/"git-cloud-${MODE}" "$@"

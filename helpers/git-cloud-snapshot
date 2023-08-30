@@ -17,6 +17,10 @@ elif [ "$1" == "help" ]; then
     exit 0
 fi
 
+internal-git-cloud-load-keys
+
+GIT_TOP_LEVEL=$(git rev-parse --show-toplevel)
+cd "$GIT_TOP_LEVEL"
 MAIN_GIT_DIR=$(git rev-parse --git-dir)
 CLOUD_GIT_DIR="${MAIN_GIT_DIR}/worktrees/cloud"
 BRANCH="${GIT_CLOUD_SNAPSHOT_BRANCH_PREFIX}-$(hostname)"

@@ -17,27 +17,9 @@ elif [ "$1" == "help" ]; then
     exit 0
 fi
 
-ssh-agent bash -c '
+internal-git-cloud-load-keys
 
-  check_key() {
-    SEARCH=$(ssh-add -L | grep " ${1//./\\\.}\$")
-    if [ -z "$SEARCH" ]; then
-        return 0
-    else
-        return 1
-    fi
-  }
-
-  for PUBKEY in "'$GIT_CLOUD_SSHDIR'"/*.pub; do
-    PRIVKEY=$(basename "$PUBKEY" .pub)
-    if check_key ~/.ssh/git-autosync/"$PRIVKEY"; then
-        echo "== Adding key: $PRIVKEY"
-        ssh-add ~/.ssh/git-autosync/"$PRIVKEY"
-    fi
-  done
-
-  while [ "0" == "0" ]; do
+while [ "0" == "0" ]; do
     git cloud snaptree
     sleep 120
-  done
-'
+done

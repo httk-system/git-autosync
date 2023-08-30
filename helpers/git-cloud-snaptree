@@ -17,28 +17,7 @@ elif [ "$1" == "help" ]; then
     exit 0
 fi
 
-check_key() {
-    SEARCH=$(ssh-add -L | grep " ${1//./\\\.}"'$')
-    if [ -z "$SEARCH" ]; then
-        return 0
-    else
-        return 1
-    fi
-}
-
-echo "== Loaded keys"
-ssh-add -l
-
-for PUBKEY in "$GIT_CLOUD_SSHDIR"/*.pub; do
-    PRIVKEY=$(basename "$PUBKEY" .pub)
-    if [ -z "$PRIVKEY" -o "$PRIVKEY" == "*" ]; then
-       continue
-    fi
-    if check_key "$GIT_CLOUD_SSHDIR/$PRIVKEY"; then
-        echo "== Adding key: $PRIVKEY"
-        ssh-add "$GIT_CLOUD_SSHDIR/$PRIVKEY"
-    fi
-done
+internal-git-cloud-load-keys
 
 echo "== Looping through all repos"
 find . -name ".git" -prune | while read LINE; do

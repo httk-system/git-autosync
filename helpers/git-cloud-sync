@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/bash
 
 set -e
 
@@ -6,7 +6,7 @@ CONFDIR=$(git-cloud confdir)
 source "${CONFDIR}/config"
 source internal-git-cloud-connshare
 
-CONNSHARE="ask"
+CONNSHARE="auto"
 CONFIRMATION="yes"
 while [ 1 == 1 ]; do
     if [ "$1" == "--cs-ask" ]; then
@@ -79,6 +79,13 @@ if [ ! -e ./.git-cloud-root ]; then
     exit 1
 fi
 
+internal-git-cloud-load-keys
+setup_cloud_connshare "$RHOST" "$CONNSHARE"
+
+echo "=============================================="
+echo "====      Syncronizing repotrees         ====="
+echo "=============================================="
+
 echo
 echo "== Gathering local repos"
 
@@ -92,12 +99,10 @@ GIT_IDS=$(find . -not \( -path ./Trash -prune \) -name ".git" -prune | while rea
               echo "${ID}|${LPATH#./}"
           done)
 
-setup_cloud_connshare "$CONNSHARE"
-
 echo
 echo "== Gathering remote repos"
 
-GIT_SRC_IDS=$(exec_ssh -S "${GIT_CLOUD_SSHDIR}/connshare.socket" "$RHOST" bash -c 'true; set -e; cd "'"$RPATH"'"; if [ ! -e ./.git-cloud-remote-root ]; then echo "SAFTEY CHECK FAIL"; exit 0; fi; find . -type d -not \( -path ./Trash -prune \) -name "*.git" -prune | while read LINE; do
+GIT_SRC_IDS=$($GIT_SSH_COMMAND -S "${GIT_CLOUD_SSHDIR}/connshare.socket" "$RHOST" bash -c 'true; set -e; cd "'"$RPATH"'"; if [ ! -e ./.git-cloud-remote-root ]; then echo "SAFTEY CHECK FAIL"; exit 0; fi; find . -type d -not \( -path ./Trash -prune \) -name "*.git" -prune | while read LINE; do
                   if git --git-dir "${LINE}" show HEAD:.gituuid >& /dev/null; then
                       ID="$(git --git-dir "${LINE}" show HEAD:.gituuid)"
                   else
@@ -131,13 +136,13 @@ if grep -q '^SAFTEY CHECK FAIL$' <<< "$GIT_MOVE_COMMANDS"; then
     exit 1
 fi
 
-echo
-echo "= Local repo ids"
-echo "$GIT_IDS"
-echo
-echo "= Remote repo ids"
-echo "$GIT_SRC_IDS"
-echo
+#echo
+#echo "= Local repo ids"
+#echo "$GIT_IDS"
+#echo
+#echo "= Remote repo ids"
+#echo "$GIT_SRC_IDS"
+#echo
 
 CONFIRM_MOVE() {
     if [ "$CONFIRMATION" != "no" ]; then
@@ -275,11 +280,11 @@ while IFS= read -r LINE; do
             #if [ "${AUTOSYNC#$REMOTE}" != "${AUTOSYNC}" ]; then
             CONFIRM_SETURL "$LPATH" "${GIT_CLOUD_REMOTE_NAME}" "${REMOTE}/${LPATH}"
             #fi
-            MAIN_GIT_DIR=$(git -C "$LPATH" rev-parse --git-dir)
-            if [ ! -e "${MAIN_GIT_DIR}/worktrees/cloud" ]; then
-                echo "= Setting up snapshot worktree for $LPATH"
-                git -C "$LPATH" cloud snapshot
-            fi
+            #MAIN_GIT_DIR=$(git -C "$LPATH" rev-parse --git-dir)
+            #if [ ! -e "${MAIN_GIT_DIR}/worktrees/cloud" ]; then
+            #    echo "= Setting up snapshot worktree for $LPATH"
+            #    git -C "$LPATH" cloud snapshot
+            #fi
         else
             echo "Unexpected path error. The path:"
             echo "  $LPATH"
@@ -292,3 +297,22 @@ while IFS= read -r LINE; do
         fi
     fi
 done <<< "$GIT_SRC_IDS"
+
+echo "=============================================="
+echo "====      Syncronizing snapshots         ====="
+echo "=============================================="
+
+git-cloud-snaptree
+
+echo "=============================================="
+echo "====       Git pull in all repos         ====="
+echo "=============================================="
+
+git-cloud-pull
+
+echo "=============================================="
+echo "====           Snapshot status           ====="
+echo "=============================================="
+
+git-cloud-status
+

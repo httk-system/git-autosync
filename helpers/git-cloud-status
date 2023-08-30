@@ -4,13 +4,34 @@ set -e
 
 CONFDIR=$(git-cloud confdir)
 source "${CONFDIR}/config"
+source internal-git-cloud-connshare
+
+CONNSHARE="auto"
+FETCH=true
+while [ 1 == 1 ]; do
+    if [ "$1" == "--cs-ask" ]; then
+        CONNSHARE="ask"
+        shift 1
+    elif [ "$1" == "--cs-auto" ]; then
+        CONNSHARE="auto"
+        shift 1
+    elif [ "$1" == "--cs-off" ]; then
+        CONNSHARE="off"
+        shift 1
+    elif [ "$1" == "--no-fetch" ]; then
+        FETCH=false
+        shift 1
+    else
+        break
+    fi
+done
 
 if [ "$1" == "describe" ]; then
    echo "Show the difference between the working tree and the latest cloud checkpoint(s)."
    exit 0
 elif [ "$1" == "help" ]; then
     echo
-    echo "Usage: git cloud status [--no-fetch] [--all]"
+    echo "Usage: git cloud status [--no-fetch] [--cs-ask|--cs-auto|--cs-off]"
     echo
     echo "Show the difference between the working tree and the latest cloud checkpoint."
     echo ""
@@ -18,53 +39,77 @@ elif [ "$1" == "help" ]; then
     echo "  --no-fetch: base output on what is already known about the"
     echo "              cloud remote without starting with a fetch operation."
     echo
-    echo " --all: show the difference to all cloud checkpoints"
-    echo
     exit 0
 fi
-
-FETCH=true
-ALL=false
-for OPT in "$@"; do
-    if [ "$OPT" == "--no-fetch" ]; then
-        FETCH=false
-    elif [ "$OPT" == "--all" ]; then
-        ALL=true
-    fi
-done
-
-MAIN_GIT_DIR=$(git rev-parse --git-dir)
-CLOUD_GIT_DIR="${MAIN_GIT_DIR}/worktrees/cloud"
-BRANCH="${GIT_CLOUD_SNAPSHOT_BRANCH_PREFIX}-$(hostname)"
-LOCAL_BRANCH=$(git rev-parse --abbrev-ref main-worktree/HEAD)
 
 if [ "$FETCH" == "true" ]; then
-    git fetch "${GIT_CLOUD_REMOTE_NAME}"
+    internal-git-cloud-load-keys "$CONNSHARE"
 fi
 
-git --git-dir "${CLOUD_GIT_DIR}" add -A
+#BRANCH="${GIT_CLOUD_SNAPSHOT_BRANCH_PREFIX}-$(hostname)"
+#LOCAL_BRANCH=$(git rev-parse --abbrev-ref main-worktree/HEAD)
 
-if [ "$ALL" == "false" ]; then
-    git --git-dir "${CLOUD_GIT_DIR}" diff --cached --stat .
-    exit 0
+#if [ "$ALL" == "false" ]; then
+#    git --git-dir "${CLOUD_GIT_DIR}" diff --cached --stat .
+#    exit 0
+#fi
+
+#echo "== Cloud checkpoint diffs (use git cloud apply <branch name>)"
+
+if git rev-parse --show-toplevel >& /dev/null; then
+    GIT_TOP_LEVEL=$(git rev-parse --show-toplevel)
+    cd "$GIT_TOP_LEVEL"
 fi
 
-echo "== Cloud checkpoint diffs (use git cloud apply <branch name>)"
+find . -name ".git" -prune | while read LINE; do
+    REPOPATH=$(dirname "$LINE")
+    echo
+    echo "== REPO: $REPOPATH"
 
-for BRANCH in $(git branch -r -l "${GIT_CLOUD_REMOTE_NAME}/${GIT_CLOUD_SNAPSHOT_BRANCH_PREFIX}-*"); do
-    BASE=$(basename "$BRANCH")
-    #RELATIVE=$(git rev-list --left-right --count "HEAD...${BRANCH}")
-    LAST_MSG=$(git log "${BRANCH}" -1 --pretty=%B)
-    if [ "${LAST_MSG#git-cloud}" != "${LAST_MSG}" ]; then
-        LAST_BRANCH="[$(cut -d\  -f4 <<<"$LAST_MSG")]"
-        TIMESTAMP="at $(cut -d\  -f5- <<<"$LAST_MSG")"
-    else
-        LAST_BRANCH="[??] (msg: $(head -n 1 <<<"$LAST_MSG"))"
-        TIMESTAMP=""
+    (cd "$REPOPATH"
+
+    MAIN_GIT_DIR=$(git rev-parse --git-dir)
+    CLOUD_GIT_DIR="${MAIN_GIT_DIR}/worktrees/cloud"
+
+    if [ "$FETCH" == "true" ]; then
+        git --git-dir "${MAIN_GIT_DIR}" fetch "${GIT_CLOUD_REMOTE_NAME}"
     fi
-    printf "= %s from %s %s\n" "$BASE" "$LAST_BRANCH" "$TIMESTAMP"
-    git diff --name-status "${BRANCH}"
-    printf "\n"
+
+    git --git-dir "${CLOUD_GIT_DIR}" add -A
+
+    if ! git diff-index --quiet --cached HEAD --; then
+        echo "* Repo has staged uncommited files"
+    fi
+    if ! git diff-files --quiet; then
+        echo "* Repo has unstaged modified files"
+    fi
+    if [ -n "$(git ls-files --exclude-standard --others)" ]; then
+        echo "* Repo has modified untracked files"
+    fi
+    UNPUSHED=$(git rev-list @{u}..@ --count)
+    if [ "$UNPUSHED" -gt "0" ]; then
+        echo "***** REPO HAS COMMITS THAT HAS NOT BEEN PUSHED *****"
+    fi
+
+    for BRANCH in $(git --git-dir "$CLOUD_GIT_DIR" branch -r -l "${GIT_CLOUD_REMOTE_NAME}/${GIT_CLOUD_SNAPSHOT_BRANCH_PREFIX}-*"); do
+
+        #BASE=$(basename "$BRANCH")
+        #RELATIVE=$(git -C "$REPOPATH" rev-list --left-right --count "HEAD...${BRANCH}")
+        #LAST_MSG=$(git -C "$REPOPATH" log "${BRANCH}" -1 --pretty=%B)
+        #if [ "${LAST_MSG#git-cloud}" != "${LAST_MSG}" ]; then
+        #    LAST_BRANCH="[$(cut -d\  -f4 <<<"$LAST_MSG")]"
+        #    TIMESTAMP="at $(cut -d\  -f5- <<<"$LAST_MSG")"
+        #else
+        #    LAST_BRANCH="[??] (msg: $(head -n 1 <<<"$LAST_MSG"))"
+        #    TIMESTAMP=""
+        #fi
+        #printf "= %s from %s %s\n" "$BASE" "$LAST_BRANCH" "$TIMESTAMP"
+        if [ -n "$(git --git-dir "${CLOUD_GIT_DIR}" diff --name-status "${BRANCH}")" ]; then
+            echo "* ${BRANCH} has a diff -- check: git --git-dir \"${CLOUD_GIT_DIR}\" diff ${BRANCH}"
+        fi
+        #git diff --name-status "${BRANCH}"
+        #printf "\n"
+    done
+
+    )
 done
-
-
