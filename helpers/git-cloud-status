@@ -4,27 +4,6 @@ set -e
 
 CONFDIR=$(git-cloud confdir)
 source "${CONFDIR}/config"
-source internal-git-cloud-connshare
-
-CONNSHARE="auto"
-FETCH=true
-while [ 1 == 1 ]; do
-    if [ "$1" == "--cs-ask" ]; then
-        CONNSHARE="ask"
-        shift 1
-    elif [ "$1" == "--cs-auto" ]; then
-        CONNSHARE="auto"
-        shift 1
-    elif [ "$1" == "--cs-off" ]; then
-        CONNSHARE="off"
-        shift 1
-    elif [ "$1" == "--no-fetch" ]; then
-        FETCH=false
-        shift 1
-    else
-        break
-    fi
-done
 
 if [ "$1" == "describe" ]; then
    echo "Show the difference between the working tree and the latest cloud checkpoint(s)."
@@ -42,8 +21,16 @@ elif [ "$1" == "help" ]; then
     exit 0
 fi
 
-if [ "$FETCH" == "true" ]; then
-    internal-git-cloud-load-keys "$CONNSHARE"
+# Ascend until we find a .git-cloud
+while [ "$(pwd)" != "/" ]; do
+  if [ -f ".git-cloud" ]; then
+      break
+  fi
+  cd ..
+done
+if [ ! -f ".git-cloud" ]; then
+    echo "Git cloud pull must be run inside a git cloud repotree." >&2
+    exit 1
 fi
 
 #BRANCH="${GIT_CLOUD_SNAPSHOT_BRANCH_PREFIX}-$(hostname)"
@@ -78,10 +65,10 @@ find . -name ".git" -prune | while read LINE; do
     git --git-dir "${CLOUD_GIT_DIR}" add -A
 
     if ! git diff-index --quiet --cached HEAD --; then
-        echo "* Repo has staged uncommited files"
+        echo "***** REPO HAS STAGED UNCOMMITED FILES *****"
     fi
     if ! git diff-files --quiet; then
-        echo "* Repo has unstaged modified files"
+        echo "***** REPO HAS UNSTAGED MODIFIED FILES *****"
     fi
     if [ -n "$(git ls-files --exclude-standard --others)" ]; then
         echo "* Repo has modified untracked files"

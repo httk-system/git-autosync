@@ -3,8 +3,6 @@
 CONFDIR=$(git-cloud confdir)
 source "${CONFDIR}/config"
 
-CONNSHARE="$1"
-
 check_key() {
   SEARCH=$(ssh-add -L | grep " ${1//./\\\.}\$")
   if [ -z "$SEARCH" ]; then
@@ -20,8 +18,4 @@ for PUBKEY in "$GIT_CLOUD_SSHDIR"/*.pub; do
       echo "== Adding key: $PRIVKEY"
       ssh-add ~/.ssh/git-autosync/"$PRIVKEY"
   fi
-  if [ -n "$CONNSHARE" ]; then
-      setup_cloud_connshare "$PRIVKEY" "$CONNSHARE"
-  fi
-
 done

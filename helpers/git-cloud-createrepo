@@ -31,6 +31,6 @@ LOCAL="$(basename "$REMOTE")"
 RHOST="${BARE_REMOTE%%:*}"
 RPATH="${BARE_REMOTE#*:}"
 
-ssh "$RHOST" bash -c "echo -n \"\"; mkdir -p \"$RPATH\" && cd \"$RPATH\" && git init --bare --initial-branch=main ."
+${GIT_SSH_COMMAND} "$RHOST" bash -c "echo -n \"\"; mkdir -p \"$RPATH\" && cd \"$RPATH\" && git init --bare --initial-branch=main ."
 
 git cloud clone "$BARE_REMOTE"

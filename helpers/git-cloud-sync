@@ -4,86 +4,55 @@ set -e
 
 CONFDIR=$(git-cloud confdir)
 source "${CONFDIR}/config"
-source internal-git-cloud-connshare
 
-CONNSHARE="auto"
 CONFIRMATION="yes"
-while [ 1 == 1 ]; do
-    if [ "$1" == "--cs-ask" ]; then
-        CONNSHARE="ask"
-        shift 1
-    elif [ "$1" == "--cs-auto" ]; then
-        CONNSHARE="auto"
-        shift 1
-    elif [ "$1" == "--cs-off" ]; then
-        CONNSHARE="off"
-        shift 1
-    elif [ "$1" == "-Y" ]; then
-        CONFIRMATION="no"
-        CONNSHARE="auto"
-        shift 1
-    else
-        break
-    fi
-done
 
 if [ "$1" == "describe" ]; then
     echo "Completely align a local repotree to a cloud repotree."
     exit 0
 elif [ "$1" == "help" ]; then
     echo
-    echo "Usage: git-cloud sync [-Y] [--cs-ask|cs-auto|--cs-off] [remote path]"
+    echo "Usage: git-cloud sync [-Y]"
     echo
     echo "Completely align the local repotree to a cloud repotree."
     echo
-    echo "Give <remote path>, e.g., user@example.com:path/to/repos to find all git repos under that path"
-    echo "and clone them under the present path. When doing this, the command also searches through the"
-    echo "current working directory, and if there are already cloned matching repositories, they are"
-    echo "moved into place to match the remote directory structure."
+    echo "Reads a remote path from .git-cloud, e.g., user@example.com:path/to/repos and then finds"
+    echo "all git repos under that path and clone them under the present path. When doing this, the"
+    echo "command also searches through the current working directory, and if there are already cloned"
+    echo "matching repositories, they are moved into place to match the remote directory structure."
     echo
-    echo "If <remote path> is not given, then the file .git-cloud-root is read"
-    echo "for this information instead."
-    echo ""
     echo "Parameters:"
     echo
-    echo "    -Y: ask for no confirmations whatsoever, implies --cs-auto"
+    echo "    -Y: don't ask for confirmations"
     echo
-    echo "    --cs-ask (default): set up ssh connection sharing, but ask each time it is used (safer on multiuser machines)"
-    echo
-    echo "    --cs-auto: set up ssh connection sharing, and skip passwords (unsafe if someone else can access the socket)."
-    echo
-    echo "    --cs-off: don't set up ssh connection sharing"
-    echo ""
     exit 0
 fi
 
-if [ -z "$1" -a -e ./.git-cloud-root ]; then
-    REMOTE=$(cat ./.git-cloud-root)
-else
-    REMOTE="$1"
-fi
-
-RHOST="${REMOTE%:*}"
-RPATH="${REMOTE##*:}"
-
-if [ ! -e ./.git-cloud-root ]; then
-    echo ""
-    echo "As a saftey feature, git-cloud sync requires specific hidden files"
-    echo "to exist in both the source and destination directories it operates on."
-    echo "This ensures it is not accidentally invoked on the wrong directoires"
-    echo ""
-    echo "The local .git-cloud-root file is missing."
-    echo ""
-    echo "Verify that you are in the right directory, create an empty .git-cloud-root and try again."
-    echo ""
+# Ascend until we find a .git-cloud
+while [ "$(pwd)" != "/" ]; do
+  if [ -f ".git-cloud" ]; then
+      break
+  fi
+  cd ..
+done
+if [ ! -f ".git-cloud" ]; then
+    echo "Git cloud pull must be run inside a git cloud repotree." >&2
     exit 1
 fi
 
-internal-git-cloud-load-keys
-setup_cloud_connshare "$RHOST" "$CONNSHARE"
+source ./.git-cloud
+
+if [ -z "$REMOTE_REPOTREE" ]; then
+    echo ".git-cloud did not define REMOTE_REPOTREE"
+    exit 1
+fi
+
+REMOTE="${REMOTE_REPOTREE}"
+RHOST="${REMOTE%:*}"
+RPATH="${REMOTE##*:}"
 
 echo "=============================================="
-echo "====      Syncronizing repotrees         ====="
+echo "====  Syncronizing with remote repotree  ====="
 echo "=============================================="
 
 echo
@@ -102,7 +71,7 @@ GIT_IDS=$(find . -not \( -path ./Trash -prune \) -name ".git" -prune | while rea
 echo
 echo "== Gathering remote repos"
 
-GIT_SRC_IDS=$($GIT_SSH_COMMAND -S "${GIT_CLOUD_SSHDIR}/connshare.socket" "$RHOST" bash -c 'true; set -e; cd "'"$RPATH"'"; if [ ! -e ./.git-cloud-remote-root ]; then echo "SAFTEY CHECK FAIL"; exit 0; fi; find . -type d -not \( -path ./Trash -prune \) -name "*.git" -prune | while read LINE; do
+GIT_SRC_IDS=$(${GIT_SSH_COMMAND} "$RHOST" bash -c 'true; set -e; cd "'"$RPATH"'"; if [ ! -e ./.git-cloud-repotree ]; then echo "SAFTEY CHECK FAIL"; exit 0; fi; find . -type d -not \( -path ./Trash -prune \) -name "*.git" -prune | while read LINE; do
                   if git --git-dir "${LINE}" show HEAD:.gituuid >& /dev/null; then
                       ID="$(git --git-dir "${LINE}" show HEAD:.gituuid)"
                   else
@@ -123,15 +92,15 @@ GIT_SRC_IDS=$($GIT_SSH_COMMAND -S "${GIT_CLOUD_SSHDIR}/connshare.socket" "$RHOST
                   echo "${ID}|${RPATH#./}|$REMOTE_INFO"
 done')
 
-if grep -q '^SAFTEY CHECK FAIL$' <<< "$GIT_MOVE_COMMANDS"; then
+if grep -q '^SAFTEY CHECK FAIL$' <<< "$GIT_SRC_IDS"; then
     echo ""
-    echo "As a saftey feature, git cloud sync requires specific hidden files"
-    echo "to exist in both the source and destination directories it operates on."
-    echo "This ensures it is not accidentally invoked on the wrong directoires"
+    echo "As a saftey feature, git cloud sync requires"
+    echo "that the syncronization is made against a prepared repository tree"
+    echo "on the destination to avoid being invoked on the wrong directoires"
     echo ""
-    echo "The remote .git-cloud-remote-root file is missing."
+    echo "The remote .git-cloud-repotree file is missing."
     echo ""
-    echo "Verify that you giving the right remote path, login on that server and create an empty .git-cloud-remote-root, and try again."
+    echo "Verify that you giving the right remote path, login on that server and create an empty .git-cloud-repotree, and try again."
     echo ""
     exit 1
 fi
@@ -302,13 +271,13 @@ echo "=============================================="
 echo "====      Syncronizing snapshots         ====="
 echo "=============================================="
 
-git-cloud-snaptree
+git-cloud-snapshot
 
 echo "=============================================="
-echo "====       Git pull in all repos         ====="
+echo "====     Git pull in all authed repos    ====="
 echo "=============================================="
 
-git-cloud-pull
+git-cloud-pull --authed-only
 
 echo "=============================================="
 echo "====           Snapshot status           ====="

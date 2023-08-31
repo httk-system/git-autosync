@@ -17,9 +17,7 @@ elif [ "$1" == "help" ]; then
     exit 0
 fi
 
-internal-git-cloud-load-keys
-
 while [ "0" == "0" ]; do
-    git-cloud-snaptree
+    git-cloud-snapshot
     sleep 120
 done
