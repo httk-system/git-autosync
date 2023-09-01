@@ -18,7 +18,8 @@ elif [ "$1" == "help" ]; then
 fi
 
 # Ascend until we find a .git-cloud
-while [ "$(pwd)" != "/" ]; do
+cd "$(pwd -P)"
+while [ "$(pwd -P)" != "/" ]; do
   if [ -f ".git-cloud" ]; then
       break
   fi
