@@ -1,0 +1,41 @@
+
+export GIT_CLOUD_ROOT=$(while [ "$(cd "$dir"; pwd -P)" != "/" ]; do if [ -f "${dir}/.git-cloud" ]; then echo "${dir}"; break; fi; dir="${dir}/.."; done)
+if [ -n "$GIT_CLOUD_ROOT" ]; then
+    source "$GIT_CLOUD_ROOT/.git-cloud"
+fi
+
+if [ -e ~/.git-cloud ]; then
+    CONFDIR=~/.git-cloud
+elif [ -n "$XDG_CONFIG_HOME" ]; then
+    if [ "$XDG_CONFIG_HOME" != "$HOME" ]; then
+        CONFDIR="$XDG_CONFIG_HOME/git-cloud"
+    else
+        CONFDIR=~/.git-cloud
+    fi
+elif [ -d ~/.config ]; then
+    CONFDIR=~/.config/git-cloud
+fi
+if [ ! -e "${CONFDIR}/config" ]; then
+    mkdir -p "$CONFDIR"
+    mkdir -p ~/.ssh/git-cloud
+    cat > "${CONFDIR}/config" <<EOF
+GIT_CLOUD_SSHDIR="$HOME/.ssh/git-cloud"
+GIT_CLOUD_REMOTE_NAME="cloud"
+GIT_CLOUD_SNAPSHOT_BRANCH_PREFIX="snapshot"
+GIT_CLOUD_WRAP_SSHAGENT="no"
+GIT_CLOUD_READ_KEYS="yes"
+GIT_CLOUD_CONNSHARE="auto"
+EOF
+fi
+
+if [ "$MODE" == "confdir" ]; then
+    echo "${CONFDIR}"
+    exit 0
+fi
+
+source "${CONFDIR}/config"
+
+# Needed, because we use this variable explicitly in some places of the scripts
+if [ -z "$GIT_SSH_COMMAND" ]; then
+    export GIT_SSH_COMMAND="ssh"
+fi

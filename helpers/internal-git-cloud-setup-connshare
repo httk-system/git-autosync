@@ -1,12 +1,5 @@
-#!/bin/bash
-
-CONFDIR=$(git-cloud confdir)
-source "${CONFDIR}/config"
 
 if [ "$CONNSHARE_SETUP_DONE" != "1" ]; then
-
-  CONFDIR=$(git-cloud confdir)
-  source "${CONFDIR}/config"
 
   setup_cloud_connshare() {
 
@@ -15,20 +8,19 @@ if [ "$CONNSHARE_SETUP_DONE" != "1" ]; then
 
     if [ "$CONNSHARE" == "auto" -o "$CONNSHARE" == "ask" ]; then
 
+      echo "== Setting up ssh connection sharing to: ${RHOST}"
+
       if ssh -S "${GIT_CLOUD_SSHDIR}/%C.cs.socket" -O check "$RHOST" >& /dev/null; then
           return
       fi
 
-      echo "== Setting up ssh connection sharing to remote (handle auth if asked)"
-
       if [ "$CONNSHARE" == "auto" ]; then
           ssh -M -S "${GIT_CLOUD_SSHDIR}/%C.cs.socket" -o "ControlPersist=2h" "$RHOST" true
-          ls "${GIT_CLOUD_SSHDIR}/"
       else
           ssh -MM -S "${GIT_CLOUD_SSHDIR}/%C.cs.socket" -o "ControlPersist=2h" "$RHOST" true
       fi
 
-      if ! ssh -S "${GIT_CLOUD_SSHDIR}/%C.cs.socket" -O check "$RHOST"; then
+      if ! ssh -S "${GIT_CLOUD_SSHDIR}/%C.cs.socket" -O check "$RHOST" >& /dev/null; then
           echo "Error: failed to open ssh connection with connection sharing to $RHOST"
           exit 1
       fi
@@ -44,7 +36,7 @@ if [ "$CONNSHARE_SETUP_DONE" != "1" ]; then
             if [ "$SOCKET" == "${GIT_CLOUD_SSHDIR}/*.cs.socket" ]; then
                 break
             fi
-            ssh -O exit -S "${SOCKET}" dummy
+            ssh -O exit -S "${SOCKET}" dummy >& /dev/null
             rm -f "${SOCKET}"
         done
   }

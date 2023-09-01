@@ -4,8 +4,11 @@ SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &> /dev/null && pwd -P)
 export HELPER_PATH="${SCRIPT_DIR}/../helpers"
 export PATH="${HELPER_PATH}:$PATH"
 
-if [ -z "$1" -o "$1" == "help" -o "$1" == "--help" ]; then
-    if [ -z "$2" ]; then
+MODE="$1"
+shift 1
+
+if [ -z "$MODE" -o "$MODE" == "help" -o "$MODE" == "--help" -o \( "$MODE" != "confdir" -a ! -e "${HELPER_PATH}"/"git-cloud-${MODE}" \) ]; then
+    if [ -z "$1" ]; then
         echo
         echo "git-cloud - timeline and syncronization helpers to maintain a 'cloud' tree of git repos."
         echo
@@ -13,13 +16,15 @@ if [ -z "$1" -o "$1" == "help" -o "$1" == "--help" ]; then
         echo
         echo "Modes:"
         echo
-        for HELPER in "${HELPER_PATH}"/git-cloud-*; do
+        HELPERS=$(ls "${HELPER_PATH}"/git-cloud-* | sort)
+        for HELPER in $HELPERS; do
             if [ "${HELPER%*~}" != "${HELPER}" ]; then
                 continue
             fi
             DESC=$("$HELPER" describe)
             HELPER_NAME=$(basename "$HELPER")
             echo "  ${HELPER_NAME#git-cloud-}:" "${DESC}"
+            echo ""
         done
         echo
         echo "For more info, execute: git-cloud help <mode>"
@@ -28,7 +33,7 @@ if [ -z "$1" -o "$1" == "help" -o "$1" == "--help" ]; then
     else
         MODE=$2
         if [ -e "${HELPER_PATH}"/"git-cloud-${MODE}" ]; then
-            shift 2
+            shift 1
             "${HELPER_PATH}"/"git-cloud-${MODE}" help "$@"
             exit 0
         else
@@ -38,49 +43,9 @@ if [ -z "$1" -o "$1" == "help" -o "$1" == "--help" ]; then
     fi
 fi
 
-MODE="$1"
-shift 1
+source internal-git-cloud-read-config
 
-if [ -e ~/.git-cloud ]; then
-    CONFDIR=~/.git-cloud
-elif [ -n "$XDG_CONFIG_HOME" ]; then
-    if [ "$XDG_CONFIG_HOME" != "$HOME" ]; then
-        CONFDIR="$XDG_CONFIG_HOME/git-cloud"
-    else
-        CONFDIR=~/.git-cloud
-    fi
-elif [ -d ~/.config ]; then
-    CONFDIR=~/.config/git-cloud
-fi
-if [ ! -e "${CONFDIR}/config" ]; then
-    mkdir -p "$CONFDIR"
-    mkdir -p ~/.ssh/git-cloud
-    cat > "${CONFDIR}/config" <<EOF
-GIT_CLOUD_SSHDIR="$HOME/.ssh/git-cloud"
-GIT_CLOUD_REMOTE_NAME="cloud"
-GIT_CLOUD_SNAPSHOT_BRANCH_PREFIX="snapshot"
-GIT_CLOUD_WRAP_SSHAGENT="yes"
-GIT_CLOUD_READ_KEYS="yes"
-GIT_CLOUD_CONNSHARE="auto"
-EOF
-fi
-
-if [ "$MODE" == "confdir" ]; then
-    echo "${CONFDIR}"
-    exit 0
-fi
-
-source "${CONFDIR}/config"
-
-export GIT_CLOUD_ROOT=$(while [ "$(cd "$dir"; pwd -P)" != "/" ]; do if [ -f "${dir}/.git-cloud" ]; then echo "${dir}"; break; fi; dir="${dir}/.."; done)
-if [ -n "$GIT_CLOUD_ROOT" ]; then
-    source "$GIT_CLOUD_ROOT/.git-cloud"
-fi
-
-if [ -z "$GIT_SSH_COMMAND" ]; then
-    export GIT_SSH_COMMAND="ssh"
-fi
-export GIT_CLOUD_ORIG_SSH_AUTH_SOCK=$SSH_AUTH_SOCK
+export GIT_CLOUD_ORIG_SSH_AUTH_SOCK="$SSH_AUTH_SOCK"
 
 if [ "$GIT_CLOUD_WRAP_SSHAGENT" != "yes" ]; then
     if [ "$GIT_CLOUD_READ_KEYS" == "yes" ]; then
@@ -89,15 +54,14 @@ if [ "$GIT_CLOUD_WRAP_SSHAGENT" != "yes" ]; then
     if [ "$GIT_CLOUD_READ_KEYS" == "auto" -o "$GIT_CLOUD_READ_KEYS" == "ask" ]; then
         source internal-git-cloud-setup-connshare
     fi
-    "${HELPER_PATH}"/"git-cloud-${MODE}" "$@"
+    exec "${HELPER_PATH}"/"git-cloud-${MODE}" "$@"
 else
-    ssh-agent bash -c '
+    exec ssh-agent bash -c '
         if [ "'$GIT_CLOUD_READ_KEYS'" == "yes" ]; then
           source internal-git-cloud-load-keys
         fi
         if [ "'$GIT_CLOUD_CONNSHARE'" == "auto" -o "'$GIT_CLOUD_CONNSHARE'" == "ask" ]; then
           source internal-git-cloud-setup-connshare
         fi
-        internal-git-cloud-load-keys "'${GIT_CLOUD_CONNSHARE}'"
         "${HELPER_PATH}"/"git-cloud-'${MODE}'" "$@"' "bash" "$@"
 fi

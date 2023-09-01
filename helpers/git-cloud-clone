@@ -2,8 +2,7 @@
 
 set -e
 
-CONFDIR=$(git-cloud confdir)
-source "${CONFDIR}/config"
+source internal-git-cloud-read-config
 
 if [ "$1" == "describe" ]; then
    echo "Clone a single cloud repo into the local directory."

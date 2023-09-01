@@ -2,8 +2,7 @@
 
 set -e
 
-CONFDIR=$(git-cloud confdir)
-source "${CONFDIR}/config"
+source internal-git-cloud-read-config
 
 if [ "$1" == "describe" ]; then
    echo "Continously create checkpoints of the whole repotree."
@@ -18,6 +17,9 @@ elif [ "$1" == "help" ]; then
 fi
 
 while [ "0" == "0" ]; do
-    git-cloud-snapshot
+    nice git-cloud-snapshot
+    echo
+    echo "==== Snapshot cycle done (waiting)"
+    echo
     sleep 120
 done
