@@ -86,14 +86,15 @@ else
 
 fi
 
-if ! git show-branch "${GIT_CLOUD_REMOTE_NAME}/${BRANCH}" >& /dev/null; then
+UPSTREAM="$(git for-each-ref --format='%(upstream:short)' "$(git rev-parse -q --symbolic-full-name ${BRANCH})")"
 
-    echo "== Upstream branch does not exist, pushing with --set-upstream"
+if [ -z "$UPSTREAM" ]; then
+    echo "== Upstream branch not set, pushing with --set-upstream"
     git --git-dir "${CLOUD_GIT_DIR}" push --follow-tags --set-upstream "${GIT_CLOUD_REMOTE_NAME}" "${BRANCH}"
 
 else
 
-    if [ -n "$(git --git-dir "${CLOUD_GIT_DIR}" cherry | head -n 1)" ]; then
+    if [ -n "$(git --git-dir "${CLOUD_GIT_DIR}" cherry "${GIT_CLOUD_REMOTE_NAME}/${BRANCH}" | head -n 1)" ]; then
         echo "== Changes made, pushing to cloud"
         git --git-dir "${CLOUD_GIT_DIR}" push --follow-tags
     else
@@ -101,5 +102,5 @@ else
     fi
 
 fi
-exit 0
 
+exit 0

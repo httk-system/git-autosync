@@ -9,7 +9,7 @@ if [ "$1" == "describe" ]; then
    exit 0
 elif [ "$1" == "help" ]; then
     echo
-    echo "Usage: git cloud status [--no-fetch] [--cs-ask|--cs-auto|--cs-off]"
+    echo "Usage: git cloud status [--no-fetch]"
     echo
     echo "Show the difference between the working tree and the latest cloud checkpoint."
     echo ""
@@ -18,6 +18,13 @@ elif [ "$1" == "help" ]; then
     echo "              cloud remote without starting with a fetch operation."
     echo
     exit 0
+fi
+
+FETCH="true"
+if [ "$1" == "--no-fetch" ]; then
+    FETCH="false"
+    FETCHARG="--no-fetch"
+    shift 1
 fi
 
 # Ascend until we find a .git-cloud
@@ -33,12 +40,17 @@ if [ ! -f ".git-cloud" ]; then
     exit 1
 fi
 
+if [ "$SNAP" == "true" ]; then
+    git-cloud-snapshot
+fi
+
 find . -name ".git" -prune | while read LINE; do
     REPOPATH=$(dirname "$LINE")
+    ABSREPOPATH=$(cd "$REPOPATH"; pwd -P)
     echo
-    echo "== REPO: $REPOPATH"
+    echo "== REPO: $ABSREPOPATH"
 
     (cd "$REPOPATH"
-     git-cloud-statrepo
+     git-cloud-repostatus $FETCHARG
     )
 done

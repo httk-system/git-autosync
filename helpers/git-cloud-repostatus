@@ -9,13 +9,15 @@ if [ "$1" == "describe" ]; then
    exit 0
 elif [ "$1" == "help" ]; then
     echo
-    echo "Usage: git cloud statrepo [--no-fetch]"
+    echo "Usage: git cloud repostatus [--no-fetch]"
     echo
     echo "Show the difference between the working tree and the latest cloud checkpoint."
     echo ""
     echo "Options:"
     echo "  --no-fetch: base output on what is already known about the"
     echo "              cloud remote without starting with a fetch operation."
+    echo ""
+    echo "  --no-snap: skip starting with a snapshot"
     echo
     exit 0
 fi
@@ -23,6 +25,7 @@ fi
 FETCH="true"
 if [ "$1" == "--no-fetch" ]; then
     FETCH="false"
+    shift 1
 fi
 
 if git rev-parse --show-toplevel >& /dev/null; then
@@ -59,6 +62,13 @@ fi
 
 for BRANCH in $(git --git-dir "$CLOUD_GIT_DIR" branch -r -l "${GIT_CLOUD_REMOTE_NAME}/${GIT_CLOUD_SNAPSHOT_BRANCH_PREFIX}-*"); do
 
+    if [ "$BRANCH" == "${GIT_CLOUD_REMOTE_NAME}/${GIT_CLOUD_SNAPSHOT_BRANCH_PREFIX}-$(hostname)" ]; then
+        if [ -n "$(git --git-dir "${CLOUD_GIT_DIR}" diff --name-status "${BRANCH}")" ]; then
+            echo "* LOCAL SNAPSHOT IS NOT CURRENT: ${BRANCH}"
+        fi
+        continue
+    fi
+
     #BASE=$(basename "$BRANCH")
     #RELATIVE=$(git -C "$REPOPATH" rev-list --left-right --count "HEAD...${BRANCH}")
     #LAST_MSG=$(git -C "$REPOPATH" log "${BRANCH}" -1 --pretty=%B)
@@ -86,14 +96,14 @@ for BRANCH in $(git --git-dir "$CLOUD_GIT_DIR" branch -r -l "${GIT_CLOUD_REMOTE_
                 if [ "${LAST_SNAP_CLEAN}" != "clean" ]; then
                     if [ -n "$(git --git-dir "${CLOUD_GIT_DIR}" diff --name-status "${BRANCH}")" ]; then
                         echo "* ${BRANCH} has a diff -- check: git --git-dir \"${CLOUD_GIT_DIR}\" diff ${BRANCH}"
-                    else
-                        echo "* ${BRANCH} has no diff"
+                    #else
+                        #echo "* ${BRANCH} has no diff"
                     fi
-                else
-                    echo "* ${BRANCH} is clean"
+                #else
+                    #echo "* ${BRANCH} is clean"
                 fi
             else
-                echo "* ${BRANCH} is based on a commit local branch does not have, and ${clean}"
+                echo "* ${BRANCH} is based on a commit local branch does not have, and is: ${LAST_SNAP_CLEAN}"
             fi
         fi
     else

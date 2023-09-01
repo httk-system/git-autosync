@@ -221,6 +221,7 @@ while IFS= read -r LINE; do
         DEST_ID=$(if [ -e "${LPATH}/.gituuid" ]; then echo "$(cat "${LPATH}/.gituuid")"; else echo "$(git --git-dir "$LPATH/.git" rev-list --parents HEAD | tail -1)"; fi)
         if [ "$DEST_ID" == "$ID" ]; then
             ORIGIN_SET=false
+            echo "PROCESSING $LPATH for $REMOTES"
             while IFS= read -r LINE; do
                 if [ -z "$LINE" ]; then
                     continue
@@ -233,13 +234,12 @@ while IFS= read -r LINE; do
                 elif [ "$REMOTE_REMOTE" == "origin" ]; then
                     ORIGIN_SET=true
                 fi
-                CONFIRM_SETURL "$LPATH" ${REMOTE_REMOTE} "${REMOTE_FETCH}" "${REMOTE_PUSH}"
+                echo "DEBUG: ${REMOTE_REMOTE} :: ${REMOTE_FETCH}"
+                CONFIRM_SETURL "$LPATH" "${REMOTE_REMOTE}" "${REMOTE_FETCH}" "${REMOTE_PUSH}"
             done <<< "$REMOTES"
             if [ "$ORIGIN_SET" == "false" ]; then
                 ORIGIN=$(git --git-dir "$LPATH/.git" remote get-url origin)
-                if [ "${ORIGIN#$REMOTE}" != "${ORIGIN}" ]; then
-                    CONFIRM_SETURL "$LPATH" origin "${REMOTE}/${LPATH}"
-                fi
+                CONFIRM_SETURL "$LPATH" origin "${REMOTE}/${LPATH}"
             fi
             #if git --git-dir "$LPATH/.git" remote get-url "${GIT_CLOUD_REMOTE_NAME}" >& /dev/null; then
             #    AUTOSYNC=$(git --git-dir "$LPATH/.git" remote get-url "${GIT_CLOUD_REMOTE_NAME}")

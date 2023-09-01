@@ -34,6 +34,6 @@ find . -name ".git" -prune | while read LINE; do
     DIR=$(dirname "$LINE")
     echo "==== Syncing: $DIR"
     ( cd "$DIR"
-      git-cloud-snaprepo
+      git-cloud-reposnap
     )
 done
