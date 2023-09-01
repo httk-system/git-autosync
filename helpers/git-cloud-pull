@@ -39,6 +39,7 @@ fi
 
 find . -name ".git" -prune | while read LINE; do
     REPOPATH=$(dirname "$LINE")
+    echo "== Pulling in repo: $REPOPATH"
     TRACKING=$(git -C "$REPOPATH" rev-parse --abbrev-ref --symbolic-full-name @{u})
     REMOTE=$(git -C "$REPOPATH" remote get-url "${TRACKING%%/*}")
     #CLOUD_REMOTE=$(git -C "$REPOPATH" remote get-url cloud)
@@ -55,4 +56,5 @@ find . -name ".git" -prune | while read LINE; do
             SSH_AUTH_SOCK=$GIT_CLOUD_ORIG_SSH_AUTH_SOCK git -C "$REPOPATH" pull
         fi
     fi
+    echo
 done

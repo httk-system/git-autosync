@@ -17,7 +17,10 @@ elif [ "$1" == "help" ]; then
 fi
 
 while [ "0" == "0" ]; do
-    nice git-cloud-snapshot
+    if ! nice git-cloud-snapshot; then
+        echo "== Error on git cloud snapshot. Delaying 3600 seconds and retrying."
+        sleep 3600
+    fi
     echo
     echo "==== Snapshot cycle done (waiting)"
     echo
