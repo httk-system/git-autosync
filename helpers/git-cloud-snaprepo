@@ -68,22 +68,22 @@ if [ -n "$(git --git-dir "${CLOUD_GIT_DIR}" diff --name-only --cached)" ]; then
     git --git-dir "${CLOUD_GIT_DIR}" commit -m "git-cloud commit $(hostname) ${LOCAL_BRANCH} ${LAST_COMMIT} ${CLEAN} ${CHANGE}" --no-gpg-sign
 else
 
-    LAST_MSG=$(git --git-dir "${CLOUD_GIT_DIR}" log -1 --pretty=%B)
+    LAST_MSG=$(git --git-dir "${CLOUD_GIT_DIR}" log -1 --pretty=%B | head -n 1)
     LAST_SNAP_CLIENT=$(cut -d ' ' -f 1 <<< "$LAST_MSG")
     if [ "$LAST_SNAP_CLIENT" == "git-cloud" ]; then
         LAST_SNAP_BRANCH=$(cut -d ' ' -f 4 <<< "$LAST_MSG")
         LAST_SNAP_COMMIT=$(cut -d ' ' -f 5 <<< "$LAST_MSG")
-        echo "== Check:" "$LAST_SNAP_BRANCH" != "$LOCAL_BRANCH" -o "$LAST_COMMIT" != "$LAST_SNAP_COMMIT"
         if [ "$LAST_SNAP_BRANCH" != "$LOCAL_BRANCH" -o "$LAST_COMMIT" != "$LAST_SNAP_COMMIT" ]; then
             echo "== Commiting empty due to branch or top commit change"
             git --git-dir "${CLOUD_GIT_DIR}" commit --allow-empty -m "git-cloud commit $(hostname) ${LOCAL_BRANCH} ${LAST_COMMIT} ${CLEAN} ${CHANGE}" --no-gpg-sign
+        else
+            echo "== No changes to commit"
         fi
     else
         echo "== Commiting empty commit due to unparseable previous message"
         git --git-dir "${CLOUD_GIT_DIR}" commit --allow-empty -m "git-cloud commit $(hostname) ${LOCAL_BRANCH} ${LAST_COMMIT} ${CLEAN} ${CHANGE}" --no-gpg-sign
     fi
 
-    echo "== No changes to commit"
 fi
 
 if ! git show-branch "${GIT_CLOUD_REMOTE_NAME}/${BRANCH}" >& /dev/null; then

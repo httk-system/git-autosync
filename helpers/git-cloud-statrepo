@@ -1,0 +1,101 @@
+#!/bin/bash
+
+set -e
+
+CONFDIR=$(git-cloud confdir)
+source "${CONFDIR}/config"
+
+if [ "$1" == "describe" ]; then
+   echo "Show the difference between the working tree and the latest cloud checkpoint(s)."
+   exit 0
+elif [ "$1" == "help" ]; then
+    echo
+    echo "Usage: git cloud statrepo [--no-fetch]"
+    echo
+    echo "Show the difference between the working tree and the latest cloud checkpoint."
+    echo ""
+    echo "Options:"
+    echo "  --no-fetch: base output on what is already known about the"
+    echo "              cloud remote without starting with a fetch operation."
+    echo
+    exit 0
+fi
+
+if git rev-parse --show-toplevel >& /dev/null; then
+    GIT_TOP_LEVEL=$(git rev-parse --show-toplevel)
+    cd "$GIT_TOP_LEVEL"
+else
+    echo "Must be run in a git repo" >&2
+    exit 1
+fi
+
+MAIN_GIT_DIR=$(git rev-parse --git-dir)
+CLOUD_GIT_DIR="${MAIN_GIT_DIR}/worktrees/cloud"
+LOCAL_BRANCH=$(git rev-parse --abbrev-ref main-worktree/HEAD)
+
+if [ "$FETCH" == "true" ]; then
+    git --git-dir "${MAIN_GIT_DIR}" fetch "${GIT_CLOUD_REMOTE_NAME}"
+fi
+
+git --git-dir "${CLOUD_GIT_DIR}" add -A
+
+if ! git diff-index --quiet --cached HEAD --; then
+    echo "***** REPO HAS STAGED UNCOMMITED FILES *****"
+fi
+if ! git diff-files --quiet; then
+    echo "***** REPO HAS UNSTAGED MODIFIED FILES *****"
+fi
+if [ -n "$(git ls-files --exclude-standard --others)" ]; then
+    echo "* Repo has modified untracked files"
+fi
+UNPUSHED=$(git rev-list @{u}..@ --count)
+if [ "$UNPUSHED" -gt "0" ]; then
+    echo "***** REPO HAS COMMITS THAT HAS NOT BEEN PUSHED *****"
+fi
+
+for BRANCH in $(git --git-dir "$CLOUD_GIT_DIR" branch -r -l "${GIT_CLOUD_REMOTE_NAME}/${GIT_CLOUD_SNAPSHOT_BRANCH_PREFIX}-*"); do
+
+    #BASE=$(basename "$BRANCH")
+    #RELATIVE=$(git -C "$REPOPATH" rev-list --left-right --count "HEAD...${BRANCH}")
+    #LAST_MSG=$(git -C "$REPOPATH" log "${BRANCH}" -1 --pretty=%B)
+    #if [ "${LAST_MSG#git-cloud}" != "${LAST_MSG}" ]; then
+    #    LAST_BRANCH="[$(cut -d\  -f4 <<<"$LAST_MSG")]"
+    #    TIMESTAMP="at $(cut -d\  -f5- <<<"$LAST_MSG")"
+    #else
+    #    LAST_BRANCH="[??] (msg: $(head -n 1 <<<"$LAST_MSG"))"
+    #    TIMESTAMP=""
+    #fi
+    #printf "= %s from %s %s\n" "$BASE" "$LAST_BRANCH" "$TIMESTAMP"
+
+    LAST_MSG=$(git --git-dir "${CLOUD_GIT_DIR}" log "${BRANCH}" -1 --pretty=%B | head -n 1)
+    LAST_SNAP_CLIENT=$(cut -d ' ' -f 1 <<< "$LAST_MSG")
+    if [ "$LAST_SNAP_CLIENT" == "git-cloud" ]; then
+        LAST_SNAP_BRANCH=$(cut -d ' ' -f 4 <<< "$LAST_MSG")
+        LAST_SNAP_COMMIT=$(cut -d ' ' -f 5 <<< "$LAST_MSG")
+        LAST_SNAP_CLEAN=$(cut -d ' ' -f 6 <<< "$LAST_MSG")
+        if [ "$LAST_SNAP_BRANCH" != "$LOCAL_BRANCH" ]; then
+            echo "* ${BRANCH} is on a different branch: ${LAST_SNAP_BRANCH}"
+        else
+            if [ "${#LAST_SNAP_COMMIT}" != "40" ]; then
+                echo "* ${BRANCH} unparsable commit msg: ${LAST_MSG}"
+            elif git merge-base --is-ancestor "${LAST_SNAP_COMMIT}" HEAD; then
+                if [ "${LAST_SNAP_CLEAN}" != "clean" ]; then
+                    if [ -n "$(git --git-dir "${CLOUD_GIT_DIR}" diff --name-status "${BRANCH}")" ]; then
+                        echo "* ${BRANCH} has a diff -- check: git --git-dir \"${CLOUD_GIT_DIR}\" diff ${BRANCH}"
+                    else
+                        echo "* ${BRANCH} has no diff"
+                    fi
+                else
+                    echo "* ${BRANCH} is clean"
+                fi
+            else
+                echo "* ${BRANCH} is based on a commit local branch does not have, and ${clean}"
+            fi
+        fi
+    else
+        echo "* ${BRANCH} unparsable commit msg: ${LAST_MSG}"
+    fi
+
+    #git diff --name-status "${BRANCH}"
+    #printf "\n"
+done
