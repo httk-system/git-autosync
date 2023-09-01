@@ -20,6 +20,11 @@ elif [ "$1" == "help" ]; then
     exit 0
 fi
 
+FETCH="true"
+if [ "$1" == "--no-fetch" ]; then
+    FETCH="false"
+fi
+
 if git rev-parse --show-toplevel >& /dev/null; then
     GIT_TOP_LEVEL=$(git rev-parse --show-toplevel)
     cd "$GIT_TOP_LEVEL"
@@ -33,7 +38,7 @@ CLOUD_GIT_DIR="${MAIN_GIT_DIR}/worktrees/cloud"
 LOCAL_BRANCH=$(git rev-parse --abbrev-ref main-worktree/HEAD)
 
 if [ "$FETCH" == "true" ]; then
-    git --git-dir "${MAIN_GIT_DIR}" fetch "${GIT_CLOUD_REMOTE_NAME}"
+    git --git-dir "${MAIN_GIT_DIR}" fetch -q "${GIT_CLOUD_REMOTE_NAME}"
 fi
 
 git --git-dir "${CLOUD_GIT_DIR}" add -A
