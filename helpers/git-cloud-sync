@@ -7,13 +7,14 @@ source internal-git-cloud-read-config
 CONFIRMATION="yes"
 
 if [ "$1" == "describe" ]; then
-    echo "Completely align a local repotree to a cloud repotree."
+    echo "Completely align repositories between local and remote repotrees."
     exit 0
 elif [ "$1" == "help" ]; then
     echo
-    echo "Usage: git-cloud sync [-Y]"
+    echo "Usage: git-cloud sync [-Y] [repopath]"
     echo
     echo "Completely align the local repotree to a cloud repotree."
+    echo "If <repopath> is given, only align that part of the repotree (can be a single repo)."
     echo
     echo "Reads a remote path from .git-cloud, e.g., user@example.com:path/to/repos and then finds"
     echo "all git repos under that path and clone them under the present path. When doing this, the"
@@ -27,38 +28,44 @@ elif [ "$1" == "help" ]; then
     exit 0
 fi
 
-# Ascend until we find a .git-cloud
-cd "$(pwd -P)"
-while [ "$(pwd -P)" != "/" ]; do
-  if [ -f ".git-cloud" ]; then
-      break
-  fi
-  cd ..
-done
-if [ ! -f ".git-cloud" ]; then
-    echo "Git cloud pull must be run inside a git cloud repotree." >&2
+if [ -z "$GIT_CLOUD_ROOT" ]; then
+    echo "Git cloud createrepo must be run inside a git cloud repotree." >&2
     exit 1
 fi
-
-source ./.git-cloud
-
 if [ -z "$REMOTE_REPOTREE" ]; then
     echo ".git-cloud did not define REMOTE_REPOTREE"
     exit 1
 fi
 
+if [ "$1" == "-Y" ]; then
+    CONFIRMATION="no"
+    shift 1
+fi
+
+if [ -n "$1" ]; then
+    SUBTREE="$1"
+    if [ -e "$SUBTREE" -a "$(cd "$SUBTREE"; git rev-parse --is-inside-work-tree 2>/dev/null)" == "true" ]; then
+        GIT_TOP_LEVEL=$(cd "$SUBTREE"; git rev-parse --show-toplevel)
+        LSUBTREE="$(realpath --relative-to "$GIT_CLOUD_ROOT" "$GIT_TOP_LEVEL")"
+        RSUBTREE="${LSUBTREE}.git"
+    else
+        LSUBTREE=$(realpath --relative-to "$GIT_CLOUD_ROOT" "${SUBTREE}")
+        RSUBTREE="${LSUBTREE}"
+    fi
+else
+    LSUBTREE="."
+    RSUBTREE="."
+fi
+cd "$GIT_CLOUD_ROOT"
+
 REMOTE="${REMOTE_REPOTREE}"
 RHOST="${REMOTE%:*}"
 RPATH="${REMOTE##*:}"
 
-echo "=============================================="
-echo "====  Syncronizing with remote repotree  ====="
-echo "=============================================="
-
 echo
 echo "== Gathering local repos"
 
-GIT_IDS=$(find . -not \( -path ./Trash -prune \) -name ".git" -prune | while read LINE; do
+GIT_IDS=$(find "${LSUBTREE}" -not \( -path ./Trash -prune \) -name ".git" -prune | while read LINE; do
               if [ -e "${LINE}/.gituuid" ]; then
                   ID="$(cat "${LINE}/.gituuid")"
               else
@@ -71,7 +78,7 @@ GIT_IDS=$(find . -not \( -path ./Trash -prune \) -name ".git" -prune | while rea
 echo
 echo "== Gathering remote repos"
 
-GIT_SRC_IDS=$(${GIT_SSH_COMMAND} "$RHOST" bash -c 'true; set -e; cd "'"$RPATH"'"; if [ ! -e ./.git-cloud-repotree ]; then echo "SAFTEY CHECK FAIL"; exit 0; fi; find . -type d -not \( -path ./Trash -prune \) -name "*.git" -prune | while read LINE; do
+GIT_SRC_IDS=$(${GIT_SSH_COMMAND} "$RHOST" bash -c 'true; set -e; cd "'"$RPATH"'"; if [ ! -e ./.git-cloud-repotree ]; then echo "SAFTEY CHECK FAIL"; exit 0; fi; find "'"$RSUBTREE"'" -type d -not \( -path ./Trash -prune \) -name "*.git" -prune | while read LINE; do
                   if git --git-dir "${LINE}" show HEAD:.gituuid >& /dev/null; then
                       ID="$(git --git-dir "${LINE}" show HEAD:.gituuid)"
                   else
@@ -217,6 +224,9 @@ while IFS= read -r LINE; do
     ID=$(cut -d '|' -f1 <<< "$LINE")
     LPATH=$(cut -d '|' -f2 <<< "$LINE")
     REMOTES=$(cut -d '|' -f3- <<< "$LINE" | tr '^' '\n')
+    if [ ! -e "$LPATH" -a ! -e "${LPATH}.ignore" ]; then
+        CONFIRM_CLONE "${REMOTE}/${LPATH}" "${LPATH}"
+    fi
     if [ -e "$LPATH" ]; then
         DEST_ID=$(if [ -e "${LPATH}/.gituuid" ]; then echo "$(cat "${LPATH}/.gituuid")"; else echo "$(git --git-dir "$LPATH/.git" rev-list --parents HEAD | tail -1)"; fi)
         if [ "$DEST_ID" == "$ID" ]; then
@@ -236,8 +246,8 @@ while IFS= read -r LINE; do
                 CONFIRM_SETURL "$LPATH" "${REMOTE_REMOTE}" "${REMOTE_FETCH}" "${REMOTE_PUSH}"
             done <<< "$REMOTES"
             if [ "$ORIGIN_SET" == "false" ]; then
-                ORIGIN=$(git --git-dir "$LPATH/.git" remote get-url origin)
-                CONFIRM_SETURL "$LPATH" origin "${REMOTE}/${LPATH}"
+                #ORIGIN=$(git --git-dir "$LPATH/.git" remote get-url origin)
+                CONFIRM_SETURL "$LPATH" origin "${REMOTE}/${LPATH}.git"
             fi
             #if git --git-dir "$LPATH/.git" remote get-url "${GIT_CLOUD_REMOTE_NAME}" >& /dev/null; then
             #    AUTOSYNC=$(git --git-dir "$LPATH/.git" remote get-url "${GIT_CLOUD_REMOTE_NAME}")
@@ -245,7 +255,7 @@ while IFS= read -r LINE; do
             #    AUTOSYNC="$REMOTE:[unset]"
             #fi
             #if [ "${AUTOSYNC#$REMOTE}" != "${AUTOSYNC}" ]; then
-            CONFIRM_SETURL "$LPATH" "${GIT_CLOUD_REMOTE_NAME}" "${REMOTE}/${LPATH}"
+            CONFIRM_SETURL "$LPATH" "${GIT_CLOUD_REMOTE_NAME}" "${REMOTE}/${LPATH}.git"
             #fi
             #MAIN_GIT_DIR=$(git -C "$LPATH" rev-parse --git-dir)
             #if [ ! -e "${MAIN_GIT_DIR}/worktrees/cloud" ]; then
@@ -258,28 +268,5 @@ while IFS= read -r LINE; do
             echo "Contains a repo that does not match the destination repo, yet it was not moved away."
             exit 1
         fi
-    else
-        if [ ! -e "${LPATH}.ignore" ]; then
-            CONFIRM_CLONE "${REMOTE}/${LPATH}" "${LPATH}"
-        fi
     fi
 done <<< "$GIT_SRC_IDS"
-
-echo "=============================================="
-echo "====      Syncronizing snapshots         ====="
-echo "=============================================="
-
-git-cloud-snapshot
-
-echo "=============================================="
-echo "====     Git pull in all authed repos    ====="
-echo "=============================================="
-
-git-cloud-pull --authed-only
-
-echo "=============================================="
-echo "====           Snapshot status           ====="
-echo "=============================================="
-
-git-cloud-status
-

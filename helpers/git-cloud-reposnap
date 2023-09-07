@@ -10,7 +10,7 @@ if [ "$1" == "describe" ]; then
    exit 0
 elif [ "$1" == "help" ]; then
     echo
-    echo "Usage: git cloud snapshot"
+    echo "Usage: git cloud reposnap"
     echo
     echo "Create a snapshot of the current workdir and push it to the cloud."
     echo

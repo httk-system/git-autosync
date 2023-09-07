@@ -9,27 +9,29 @@ if [ "$1" == "describe" ]; then
    exit 0
 elif [ "$1" == "help" -o "$#" -ne "1" ]; then
     echo
-    echo "Usage: git cloud create <remote>"
+    echo "Usage: git cloud create <local repo path>"
     echo
-    echo "Create a new cloud repo and clone it into the local directory."
+    echo "Create a new repo in the cloud repotree and clone it locally."
     echo ""
     exit 0
 fi
 
-REMOTE="$1"
-
-if [ "${REMOTE%.git}" == "${REMOTE}" ]; then
-    BARE_REMOTE="${REMOTE}.git"
-    REMOTE="${REMOTE}"
-else
-    BARE_REMOTE="${REMOTE}"
-    REMOTE="${REMOTE%.git}"
+if [ -z "$GIT_CLOUD_ROOT" ]; then
+    echo "Git cloud createrepo must be run inside a git cloud repotree." >&2
+    exit 1
 fi
-LOCAL="$(basename "$REMOTE")"
+if [ -z "$REMOTE_REPOTREE" ]; then
+    echo ".git-cloud did not define REMOTE_REPOTREE"
+    exit 1
+fi
 
-RHOST="${BARE_REMOTE%%:*}"
-RPATH="${BARE_REMOTE#*:}"
+REPOPATH=$(realpath --relative-to "$GIT_CLOUD_ROOT" "${1%.git}")
+cd "$GIT_CLOUD_ROOT"
 
-${GIT_SSH_COMMAND} "$RHOST" bash -c "echo -n \"\"; mkdir -p \"$RPATH\" && cd \"$RPATH\" && git init --bare --initial-branch=main ."
+REMOTE_REPOTREE_HOST="${REMOTE_REPOTREE%%:*}"
+REMOTE_REPOTREE_PATH="${REMOTE_REPOTREE#*:}"
+RPATH="${REMOTE_REPOTREE_PATH}/${REPOPATH}.git"
 
-git cloud clone "$BARE_REMOTE"
+${GIT_SSH_COMMAND} "${REMOTE_REPOTREE_HOST}" bash -c "echo -n \"\"; mkdir -p \"${RPATH}\" && cd \"${RPATH}\" && git init --bare --initial-branch=main ."
+
+git-cloud-clonerepo "$REPOPATH"

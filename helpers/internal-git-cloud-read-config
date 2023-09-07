@@ -1,5 +1,5 @@
 
-export GIT_CLOUD_ROOT=$(while [ "$(cd "$dir"; pwd -P)" != "/" ]; do if [ -f "${dir}/.git-cloud" ]; then echo "${dir}"; break; fi; dir="${dir}/.."; done)
+export GIT_CLOUD_ROOT=$(dir=.; while [ "$(cd "$dir"; pwd -P)" != "/" ]; do if [ -f "${dir}/.git-cloud" ]; then echo "${dir}"; break; fi; dir="${dir}/.."; done)
 if [ -n "$GIT_CLOUD_ROOT" ]; then
     source "$GIT_CLOUD_ROOT/.git-cloud"
 fi

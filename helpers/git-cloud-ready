@@ -1,0 +1,71 @@
+#!/usr/bin/bash
+
+set -e
+
+source internal-git-cloud-read-config
+
+if [ "$1" == "describe" ]; then
+    echo "Completely align repositories between local and remote repotrees."
+    exit 0
+elif [ "$1" == "help" ]; then
+    echo
+    echo "Usage: git-cloud ready [-Y] [subtree]"
+    echo
+    echo "Completely align the local repotree to a cloud repotree."
+    echo "If <subree> is given, only align that part of the repotree (can be a single repo)."
+    echo
+    echo "Reads a remote path from .git-cloud, e.g., user@example.com:path/to/repos and then finds"
+    echo "all git repos under that path and clone them under the present path. When doing this, the"
+    echo "command also searches through the current working directory, and if there are already cloned"
+    echo "matching repositories, they are moved into place to match the remote directory structure."
+    echo
+    echo "Parameters:"
+    echo
+    echo "    -Y: don't ask for confirmations"
+    echo
+    exit 0
+fi
+
+if [ "$1" == "-Y" ]; then
+    CONF_FLAG="-Y"
+    shift 1
+else
+    CONF_FLAG=""
+fi
+
+if [ -n "$1" ]; then
+    SUBTREE="$1"
+    if [ -e "$SUBTREE" -a "$(cd "$SUBTREE"; git rev-parse --is-inside-work-tree)" == "true" ]; then
+        GIT_TOP_LEVEL=$(cd "$SUBTREE"; git rev-parse --show-toplevel)
+        SUBTREE="$(realpath --relative-to "$GIT_CLOUD_ROOT" "$GIT_TOP_LEVEL")"
+    else
+        SUBTREE=$(realpath --relative-to "$GIT_CLOUD_ROOT" "${DIR}")
+    fi
+else
+    SUBTREE="."
+fi
+cd "$GIT_CLOUD_ROOT"
+
+echo "=============================================="
+echo "====  Syncronizing with remote repotree  ====="
+echo "=============================================="
+
+git-cloud-sync $CONF_FLAG "$SUBTREE"
+
+echo "=============================================="
+echo "====      Syncronizing snapshots         ====="
+echo "=============================================="
+
+git-cloud-snapshot "$SUBTREE"
+
+echo "=============================================="
+echo "====     Git pull in all authed repos    ====="
+echo "=============================================="
+
+git-cloud-pull --authed-only "$SUBTREE"
+
+echo "=============================================="
+echo "====           Snapshot status           ====="
+echo "=============================================="
+
+git-cloud-status "$SUBTREE"

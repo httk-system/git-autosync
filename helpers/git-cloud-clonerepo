@@ -1,0 +1,47 @@
+#!/bin/bash
+
+set -e
+
+source internal-git-cloud-read-config
+
+if [ "$1" == "describe" ]; then
+   echo "Clone a single cloud repo into the local directory."
+   exit 0
+elif [ "$1" == "help" ]; then
+    echo
+    echo "Usage: git-cloud clone <path>"
+    echo
+    echo "Clone a single repo into the local directory from the remote repotree."
+    echo
+    exit 0
+fi
+
+if [ -z "$GIT_CLOUD_ROOT" ]; then
+    echo "Git cloud createrepo must be run inside a git cloud repotree." >&2
+    exit 1
+fi
+if [ -z "$REMOTE_REPOTREE" ]; then
+    echo ".git-cloud did not define REMOTE_REPOTREE"
+    exit 1
+fi
+REPOPATH=$(realpath --relative-to "$GIT_CLOUD_ROOT" "${1%.git}")
+cd "$GIT_CLOUD_ROOT"
+
+REMOTE="${REMOTE_REPOTREE}/${REPOPATH}.git"
+
+if [ ! -e "$REPOPATH" ]; then
+    git clone "${REMOTE}" "${REPOPATH}"
+fi
+
+if ! git -C "${REPOPATH}" rev-parse HEAD >& /dev/null; then
+    echo "== Cloned repository is empty, creating and pushing empty initial commit."
+    git -C "${REPOPATH}" branch -m main
+    git -C "${REPOPATH}" commit -m "Initial commit" --allow-empty
+    git -C "${REPOPATH}" push --set-upstream origin main
+fi
+
+if ! git -C "${REPOPATH}" remote get-url "${GIT_CLOUD_REMOTE_NAME}" >& /dev/null; then
+    git -C "${REPOPATH}" remote add "${GIT_CLOUD_REMOTE_NAME}" "$SYNC_REPO"
+fi
+
+git-cloud-sync "${REPOPATH}"
