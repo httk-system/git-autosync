@@ -14,8 +14,8 @@ check_key() {
 
 for PUBKEY in "$GIT_CLOUD_SSHDIR"/*.pub; do
   PRIVKEY=$(basename "$PUBKEY" .pub)
-  if check_key ~/.ssh/git-autosync/"$PRIVKEY"; then
+  if check_key ~/.ssh/git-cloud/"$PRIVKEY"; then
       echo "== Adding key: $PRIVKEY"
-      ssh-add ~/.ssh/git-autosync/"$PRIVKEY"
+      ssh-add ~/.ssh/git-cloud/"$PRIVKEY"
   fi
 done

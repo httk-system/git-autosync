@@ -4,6 +4,17 @@ if [ -n "$GIT_CLOUD_ROOT" ]; then
     source "$GIT_CLOUD_ROOT/.git-cloud"
 fi
 
+check_ignore() {
+    DIR="$1"
+    while [ -n "${DIR}" -a "${DIR}" != "." -a "${DIR}" != "/" ]; do
+	if [ -e "${GIT_CLOUD_ROOT}/${DIR}.ignore" ]; then
+	    return 0;
+	fi
+	DIR="$(dirname "$DIR")"
+    done
+    return 1
+}
+
 if [ -e ~/.git-cloud ]; then
     CONFDIR=~/.git-cloud
 elif [ -n "$XDG_CONFIG_HOME" ]; then
@@ -17,7 +28,6 @@ elif [ -d ~/.config ]; then
 fi
 if [ ! -e "${CONFDIR}/config" ]; then
     mkdir -p "$CONFDIR"
-    mkdir -p ~/.ssh/git-cloud
     cat > "${CONFDIR}/config" <<EOF
 GIT_CLOUD_SSHDIR="$HOME/.ssh/git-cloud"
 GIT_CLOUD_REMOTE_NAME="cloud"
@@ -39,3 +49,5 @@ source "${CONFDIR}/config"
 if [ -z "$GIT_SSH_COMMAND" ]; then
     export GIT_SSH_COMMAND="ssh"
 fi
+
+mkdir -p ~/.ssh/git-cloud

@@ -52,6 +52,9 @@ if [ "$CONNSHARE_SETUP_DONE" != "1" ]; then
 fi
 
 for CONNFILE in "$GIT_CLOUD_SSHDIR"/*.cs; do
+  if [ "$CONNFILE" == "$GIT_CLOUD_SSHDIR/*.cs" ]; then
+    continue
+  fi
   REMOTE=$(basename "$CONNFILE" .cs)
   if [ -n "$REMOTE" ]; then
       setup_cloud_connshare "$REMOTE" "$GIT_CLOUD_CONNSHARE"

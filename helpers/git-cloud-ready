@@ -39,7 +39,7 @@ if [ -n "$1" ]; then
         GIT_TOP_LEVEL=$(cd "$SUBTREE"; git rev-parse --show-toplevel)
         SUBTREE="$(realpath --relative-to "$GIT_CLOUD_ROOT" "$GIT_TOP_LEVEL")"
     else
-        SUBTREE=$(realpath --relative-to "$GIT_CLOUD_ROOT" "${DIR}")
+        SUBTREE=$(realpath -m --relative-to "$GIT_CLOUD_ROOT" "${SUBTREE}")
     fi
 else
     SUBTREE="."

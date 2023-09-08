@@ -92,7 +92,7 @@ for BRANCH in $(git --git-dir "$CLOUD_GIT_DIR" branch -r -l "${GIT_CLOUD_REMOTE_
         else
             if [ "${#LAST_SNAP_COMMIT}" != "40" ]; then
                 echo "* ${BRANCH} unparsable commit msg: ${LAST_MSG}"
-            elif git merge-base --is-ancestor "${LAST_SNAP_COMMIT}" HEAD; then
+            elif git merge-base --is-ancestor "${LAST_SNAP_COMMIT}" HEAD >& /dev/null; then
                 if [ "${LAST_SNAP_CLEAN}" != "clean" ]; then
                     if [ -n "$(git --git-dir "${CLOUD_GIT_DIR}" diff --name-status "${BRANCH}")" ]; then
                         echo "* ${BRANCH} has a diff -- check: git --git-dir \"${CLOUD_GIT_DIR}\" diff ${BRANCH}"

@@ -9,11 +9,17 @@ if [ "$1" == "describe" ]; then
    exit 0
 elif [ "$1" == "help" ]; then
     echo
-    echo "Usage: git-cloud clone <path>"
+    echo "Usage: git-cloud clone [--no-sync] <path>"
     echo
     echo "Clone a single repo into the local directory from the remote repotree."
     echo
     exit 0
+fi
+
+SYNC="yes"
+if [ "$1" == "--no-sync" ]; then
+    SYNC="no"
+    shift 1
 fi
 
 if [ -z "$GIT_CLOUD_ROOT" ]; then
@@ -24,7 +30,8 @@ if [ -z "$REMOTE_REPOTREE" ]; then
     echo ".git-cloud did not define REMOTE_REPOTREE"
     exit 1
 fi
-REPOPATH=$(realpath --relative-to "$GIT_CLOUD_ROOT" "${1%.git}")
+
+REPOPATH=$(realpath -m --relative-to "$GIT_CLOUD_ROOT" "${1%.git}")
 cd "$GIT_CLOUD_ROOT"
 
 REMOTE="${REMOTE_REPOTREE}/${REPOPATH}.git"
@@ -44,4 +51,6 @@ if ! git -C "${REPOPATH}" remote get-url "${GIT_CLOUD_REMOTE_NAME}" >& /dev/null
     git -C "${REPOPATH}" remote add "${GIT_CLOUD_REMOTE_NAME}" "$SYNC_REPO"
 fi
 
-git-cloud-sync "${REPOPATH}"
+if [ "$SYNC" == "yes" ]; then
+    git-cloud-sync "${REPOPATH}"
+fi

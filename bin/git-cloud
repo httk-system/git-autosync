@@ -60,7 +60,7 @@ if [ "$GIT_CLOUD_WRAP_SSHAGENT" != "yes" ]; then
     if [ "$GIT_CLOUD_READ_KEYS" == "yes" ]; then
         source internal-git-cloud-load-keys
     fi
-    if [ "$GIT_CLOUD_READ_KEYS" == "auto" -o "$GIT_CLOUD_READ_KEYS" == "ask" ]; then
+    if [ "$GIT_CLOUD_CONNSHARE" == "auto" -o "$GIT_CLOUD_CONNSHARE" == "ask" ]; then
         source internal-git-cloud-setup-connshare
     fi
     exec "${HELPER_PATH}"/"git-cloud-${MODE}" "$@"

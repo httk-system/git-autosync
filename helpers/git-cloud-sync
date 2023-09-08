@@ -49,7 +49,7 @@ if [ -n "$1" ]; then
         LSUBTREE="$(realpath --relative-to "$GIT_CLOUD_ROOT" "$GIT_TOP_LEVEL")"
         RSUBTREE="${LSUBTREE}.git"
     else
-        LSUBTREE=$(realpath --relative-to "$GIT_CLOUD_ROOT" "${SUBTREE}")
+        LSUBTREE=$(realpath -m --relative-to "$GIT_CLOUD_ROOT" "${SUBTREE}")
         RSUBTREE="${LSUBTREE}"
     fi
 else
@@ -112,13 +112,13 @@ if grep -q '^SAFTEY CHECK FAIL$' <<< "$GIT_SRC_IDS"; then
     exit 1
 fi
 
-#echo
-#echo "= Local repo ids"
-#echo "$GIT_IDS"
-#echo
-#echo "= Remote repo ids"
-#echo "$GIT_SRC_IDS"
-#echo
+echo
+echo "= Local repo ids"
+echo "$GIT_IDS"
+echo
+echo "= Remote repo ids"
+echo "$GIT_SRC_IDS"
+echo
 
 CONFIRM_MOVE() {
     if [ "$CONFIRMATION" != "no" ]; then
@@ -141,6 +141,9 @@ echo "== Processing local repos"
 
 exec 3<&0
 while IFS= read -r LINE; do
+    if [ -z "$LINE" ]; then
+	continue
+    fi
     ID=$(cut -d '|' -f1 <<< "$LINE")
     LPATH=$(cut -d '|' -f2 <<< "$LINE")
     MATCH=$(grep "$ID" <<< "$GIT_SRC_IDS" | cut -d '|' -f2);
@@ -152,7 +155,7 @@ while IFS= read -r LINE; do
             else
                 echo "= Wrong repo in the way, trashing: $LPATH"
                 CONFIRM_MOVE "$MATCH" "Trash/$(basename "$MATCH").$RANDOM"
-                if [ -e "${LPATH}.ignore" ]; then
+                if check_ignore "${LPATH}.ignore"; then
                     echo "= Repo .ignore file exist, trashing existing repo at: $LPATH"
                     CONFIRM_MOVE "$LPATH" "Trash/$(basename "$LPATH").$RANDOM"
                 else
@@ -161,7 +164,7 @@ while IFS= read -r LINE; do
                 fi
             fi
         else
-            if [ -e "${LPATH}.ignore" ]; then
+            if check_ignore "${LPATH}"; then
                 echo "= Repo .ignore file exist, trashing existing repo at: $LPATH"
                 CONFIRM_MOVE "$LPATH" "Trash/$(basename "$LPATH").$RANDOM"
             else
@@ -213,7 +216,7 @@ CONFIRM_CLONE() {
     if [ "$CONFIRM" != "y" ]; then
         echo "Clone skipped." >&2
     else
-        git-cloud-clone "${1}" "" "" "${2}"
+        git-cloud-clonerepo --no-sync "${2}"
     fi
 }
 
@@ -221,11 +224,18 @@ echo
 echo "== Processing remote repos"
 
 while IFS= read -r LINE; do
+    if [ -z "$LINE" ]; then
+	continue
+    fi
     ID=$(cut -d '|' -f1 <<< "$LINE")
     LPATH=$(cut -d '|' -f2 <<< "$LINE")
     REMOTES=$(cut -d '|' -f3- <<< "$LINE" | tr '^' '\n')
-    if [ ! -e "$LPATH" -a ! -e "${LPATH}.ignore" ]; then
-        CONFIRM_CLONE "${REMOTE}/${LPATH}" "${LPATH}"
+    if [ ! -e "$LPATH" ]; then
+	if ! check_ignore "$LPATH"; then
+            CONFIRM_CLONE "${REMOTE}/${LPATH}" "${LPATH}"
+	else
+	    echo "= Repo $LPATH is ignored"
+	fi
     fi
     if [ -e "$LPATH" ]; then
         DEST_ID=$(if [ -e "${LPATH}/.gituuid" ]; then echo "$(cat "${LPATH}/.gituuid")"; else echo "$(git --git-dir "$LPATH/.git" rev-list --parents HEAD | tail -1)"; fi)
