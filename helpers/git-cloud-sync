@@ -65,14 +65,13 @@ RPATH="${REMOTE##*:}"
 echo
 echo "== Gathering local repos"
 
-GIT_IDS=$(find "${LSUBTREE}" -not \( -path ./Trash -prune \) -name ".git" -prune | while read LINE; do
+GIT_IDS=$(find "${LSUBTREE}" -type d \( -name Trash -prune \) -o \( -exec test -d '{}/.git' \; -prune -print \) | while read LINE; do
               if [ -e "${LINE}/.gituuid" ]; then
                   ID="$(cat "${LINE}/.gituuid")"
               else
-                  ID="$(git --git-dir "${LINE}" rev-list --parents HEAD | tail -1)"
+                  ID="$(git -C "${LINE}" rev-list --parents HEAD | tail -1)"
               fi
-              LPATH="$(dirname "$LINE")"
-              echo "${ID}|${LPATH#./}"
+              echo "${ID}|${LINE#./}"
           done)
 
 echo

@@ -30,8 +30,7 @@ if [ ! -f ".git-cloud" ]; then
 fi
 
 echo "======== Looping through all repos"
-find . -name ".git" -prune | while read LINE; do
-    DIR=$(dirname "$LINE")
+find . -type d \( -name Trash -prune \) -o \( -exec test -d '{}/.git' \; -prune -print \) | while read DIR; do
     echo "==== Syncing: $DIR"
     ( cd "$DIR"
       git-cloud-reposnap

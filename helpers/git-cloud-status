@@ -44,8 +44,7 @@ if [ "$SNAP" == "true" ]; then
     git-cloud-snapshot
 fi
 
-find . -name ".git" -prune | while read LINE; do
-    REPOPATH=$(dirname "$LINE")
+find . -type d \( -name Trash -prune \) -o \( -exec test -d '{}/.git' \; -prune -print \)  | while read REPOPATH; do
     ABSREPOPATH=$(cd "$REPOPATH"; pwd -P)
     echo
     echo "== REPO: $ABSREPOPATH"

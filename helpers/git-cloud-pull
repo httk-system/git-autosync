@@ -37,8 +37,7 @@ if [ ! -f ".git-cloud" ]; then
     exit 1
 fi
 
-find . -name ".git" -prune | while read LINE; do
-    REPOPATH=$(dirname "$LINE")
+find . -type d \( -name Trash -prune \) -o \( -exec test -d '{}/.git' \; -prune -print \) | while read REPOPATH; do
     echo "== Pulling in repo: $REPOPATH"
     TRACKING=$(git -C "$REPOPATH" rev-parse --abbrev-ref --symbolic-full-name @{u})
     REMOTE=$(git -C "$REPOPATH" remote get-url "${TRACKING%%/*}")
