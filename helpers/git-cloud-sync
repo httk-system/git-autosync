@@ -146,6 +146,11 @@ while IFS= read -r LINE; do
     ID=$(cut -d '|' -f1 <<< "$LINE")
     LPATH=$(cut -d '|' -f2 <<< "$LINE")
     MATCH=$(grep "$ID" <<< "$GIT_SRC_IDS" | cut -d '|' -f2);
+    MATCHES=$(echo "$MATCH" | wc -l)
+    if [ "$MATCHES" -gt "1" ]; then
+        echo "== MORE THAN ONE MATCH FOR REPO ${LINE}, USE .gituuid FILES TO DISTINGUISH THEM"
+        continue
+    fi
     if [ -n "$MATCH" ]; then
         if [ -e "$MATCH" ]; then
             DEST_ID=$(if [ -e "${LPATH}/.gituuid" ]; then echo "$(cat "${LPATH}/.gituuid")"; else echo "$(git --git-dir "$LPATH/.git" rev-list --parents HEAD | tail -1)"; fi)
