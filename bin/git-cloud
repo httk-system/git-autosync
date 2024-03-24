@@ -11,7 +11,7 @@ if [ -z "$MODE" -o "$MODE" == "help" -o "$MODE" == "--help" -o "$MODE" == "-h" -
     if [ -z "$1" ]; then
         # handle: git cloud help and git cloud <non-existing mode>
         echo
-        echo "git-cloud - timeline and syncronization helpers to maintain a 'cloud' tree of git repos."
+        echo "git-cloud - helpers to maintain a 'cloud' tree of git repos."
         echo
         echo "Usage: git-cloud [cloud args] mode [mode args]"
         echo

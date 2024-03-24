@@ -1,0 +1,62 @@
+
+if [ "$CONNSHARE_SETUP_DONE" != "1" ]; then
+
+  setup_cloud_connshare() {
+
+    RHOST="$1"
+    CONNSHARE="$2"
+
+    if [ "$CONNSHARE" == "auto" -o "$CONNSHARE" == "ask" ]; then
+
+      echo "== Setting up ssh connection sharing to: ${RHOST}"
+
+      if ssh -S "${GIT_CLOUD_SSHDIR}/%C.cs.socket" -O check "$RHOST" >& /dev/null; then
+          return
+      fi
+
+      if [ "$CONNSHARE" == "auto" ]; then
+          ssh -M -S "${GIT_CLOUD_SSHDIR}/%C.cs.socket" -o "ControlPersist=2h" "$RHOST" true
+      else
+          ssh -MM -S "${GIT_CLOUD_SSHDIR}/%C.cs.socket" -o "ControlPersist=2h" "$RHOST" true
+      fi
+
+      if ! ssh -S "${GIT_CLOUD_SSHDIR}/%C.cs.socket" -O check "$RHOST" >& /dev/null; then
+          echo "Error: failed to open ssh connection with connection sharing to $RHOST"
+          exit 1
+      fi
+    fi
+  }
+
+  export GIT_SSH_COMMAND="ssh -S \"${GIT_CLOUD_SSHDIR}\"/%C.cs.socket"
+
+  function trap_exit {
+        echo
+        echo "== Cleaning up ssh connection sharing sockets"
+        for SOCKET in "${GIT_CLOUD_SSHDIR}"/*.cs.socket; do
+            if [ "$SOCKET" == "${GIT_CLOUD_SSHDIR}/*.cs.socket" ]; then
+                break
+            fi
+            ssh -O exit -S "${SOCKET}" dummy >& /dev/null
+            rm -f "${SOCKET}"
+        done
+  }
+  trap trap_exit EXIT
+
+  trap_ctrlc() {
+    kill -HUP $$
+  }
+  trap trap_ctrlc INT
+
+  export -f setup_cloud_connshare
+  export CONNSHARE_SETUP_DONE=1
+fi
+
+for CONNFILE in "$GIT_CLOUD_SSHDIR"/*.cs; do
+  if [ "$CONNFILE" == "$GIT_CLOUD_SSHDIR/*.cs" ]; then
+    continue
+  fi
+  REMOTE=$(basename "$CONNFILE" .cs)
+  if [ -n "$REMOTE" ]; then
+      setup_cloud_connshare "$REMOTE" "$GIT_CLOUD_CONNSHARE"
+  fi
+done

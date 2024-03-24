@@ -1,12 +1,19 @@
 
-export GIT_CLOUD_ROOT=$(dir=.; while [ "$(cd "$dir"; pwd -P)" != "/" ]; do if [ -d "${dir}/.git-cloud" ]; then echo "${dir}"; break; fi; dir="${dir}/.."; done)
+export GIT_CLOUD_ROOT=$(dir=.; while [ "$(cd "$dir"; pwd -P)" != "/" ]; do if [ -f "${dir}/.git-cloud" ]; then echo "${dir}"; break; fi; dir="${dir}/.."; done)
 if [ -n "$GIT_CLOUD_ROOT" ]; then
-    export GIT_CLOUD_REPOCONFIG="$GIT_CLOUD_ROOT/.git-cloud"
-    source "${GIT_CLOUD_REPOCONFIG}/config"
-    export GIT_CLOUD_REMOTE="$(git -C "$GIT_CLOUD_ROOT" remote get-url cloud --push)"
-    export GIT_CLOUD_HOST="${GIT_CLOUD_REMOTE%%:*}"
-    export GIT_CLOUD_PATH="${GIT_CLOUD_REMOTE#*:}"
+    source "$GIT_CLOUD_ROOT/.git-cloud"
 fi
+
+check_ignore() {
+    DIR="$1"
+    while [ -n "${DIR}" -a "${DIR}" != "." -a "${DIR}" != "/" ]; do
+	if [ -e "${GIT_CLOUD_ROOT}/${DIR}.ignore" ]; then
+	    return 0;
+	fi
+	DIR="$(dirname "$DIR")"
+    done
+    return 1
+}
 
 if [ -e ~/.git-cloud ]; then
     CONFDIR=~/.git-cloud
@@ -44,5 +51,3 @@ if [ -z "$GIT_SSH_COMMAND" ]; then
 fi
 
 mkdir -p ~/.ssh/git-cloud
-
-export GIT_CLOUD_HOST="$(hostname)"

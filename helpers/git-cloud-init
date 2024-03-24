@@ -1,0 +1,41 @@
+#!/bin/bash
+
+set -e
+
+source internal-git-cloud-read-config
+
+if [ "$1" == "describe" ]; then
+   echo "Create a new remote cloud master repo and clone it into the local directory."
+   exit 0
+elif [ "$1" == "help" -o "$#" -lt 1 -o "$#" -gt 2 ]; then
+    echo
+    echo "Usage: git cloud create <cloud repo> [local path]"
+    echo
+    echo "Create a new cloud repo at <cloud repo> and clone it locally into <local path>."
+    echo ""
+    exit 0
+fi
+
+if [ -n "$GIT_CLOUD_ROOT" ]; then
+    echo "Already inside a git cloud masterrepo." >&2
+    exit 1
+fi
+
+CLOUD_REPO="$1"
+CLOUD_REPO="${CLOUD_REPO%.git}"
+
+LOCAL_PATH="$2"
+
+CLOUD_HOST="${CLOUD_REPO%%:*}"
+CLOUD_PATH="${CLOUD_REPO#*:}"
+if [ -z "$LOCAL_PATH" ]; then
+    LOCAL_PATH="$(basename "$CLOUD_PATH")"
+fi
+
+${GIT_SSH_COMMAND} "${CLOUD_HOST}" bash -c "echo -n \"\"; mkdir \"${CLOUD_PATH}.git\" && mkdir \"${CLOUD_PATH}.repos\" && cd \"${CLOUD_PATH}.git\" && git init -q --bare --initial-branch=main ."
+git clone --origin "cloud" -q "${CLOUD_REPO}" "${LOCAL_PATH}"
+mkdir "${LOCAL_PATH}/.git-cloud"
+touch "${LOCAL_PATH}/.git-cloud/config"
+git -C "${LOCAL_PATH}" add ".git-cloud"
+git -C "${LOCAL_PATH}" commit -m "Cloud repo init"
+git -C "${LOCAL_PATH}" push

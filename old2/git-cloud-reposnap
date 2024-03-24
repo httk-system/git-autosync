@@ -6,28 +6,23 @@ CONFDIR=$(git-cloud confdir)
 source "${CONFDIR}/config"
 
 if [ "$1" == "describe" ]; then
-   echo "Create a cloud snapshot of a single repo."
+   echo "Create a snapshot of the current workdir and push it to the cloud."
    exit 0
 elif [ "$1" == "help" ]; then
     echo
-    echo "Usage: git cloud repo-snap"
+    echo "Usage: git cloud reposnap"
     echo
-    echo "Create a cloud snapshot of a single repo."
+    echo "Create a snapshot of the current workdir and push it to the cloud."
     echo
     exit 0
-fi
-
-if [ -z "${GIT_CLOUD_ROOT}" -o -z "${GIT_CLOUD_HOST}" ]; then
-    echo "fatal: not a git cloud repository (or any of the parent directories): .git-cloud" >&2
-    exit 1
 fi
 
 GIT_TOP_LEVEL=$(git rev-parse --show-toplevel)
 cd "$GIT_TOP_LEVEL"
 MAIN_GIT_DIR=$(git rev-parse --git-dir)
 CLOUD_GIT_DIR="${MAIN_GIT_DIR}/worktrees/cloud"
+BRANCH="${GIT_CLOUD_SNAPSHOT_BRANCH_PREFIX}-$(hostname)"
 LOCAL_BRANCH=$(git rev-parse --abbrev-ref main-worktree/HEAD)
-BRANCH="${GIT_CLOUD_SNAPSHOT_BRANCH_PREFIX}/${LOCAL_BRANCH}/${GIT_CLOUD_HOST}"
 LAST_COMMIT=$(git rev-parse HEAD)
 
 if [ ! -e "${MAIN_GIT_DIR}/worktrees/cloud" ]; then
@@ -109,4 +104,3 @@ else
 fi
 
 exit 0
-
