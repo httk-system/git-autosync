@@ -42,7 +42,7 @@ if [ -n "$REMOTE_REPO" ]; then
     echo -e "${REMOTE_REPO}" > "${GIT_CLOUD_REPOCONFIG}/repos/${CLOUD_NAME}/remotes/origin.push"
 fi
 
-${GIT_SSH_COMMAND} "${GIT_CLOUD_HOST}" bash -c "echo -n \"\"; git init -q --bare --initial-branch=main \"${GIT_CLOUD_PATH}.repos/${CLOUD_NAME}.git\""
+${GIT_SSH_COMMAND} "${GIT_CLOUD_HOST}" bash -c "echo -n \"\"; if [ ! -e \"${GIT_CLOUD_PATH}.repos/${CLOUD_NAME}.git\" ]; then git init -q --bare --initial-branch=main \"${GIT_CLOUD_PATH}.repos/${CLOUD_NAME}.git\"; fi"
 
 if [ -n "$REMOTE_REPO" ]; then
     git -C "${LOCAL_PATH}" remote add cloud "${GIT_CLOUD_HOST}:${GIT_CLOUD_PATH}.repos/${CLOUD_NAME}"

@@ -1,4 +1,3 @@
-
 if [ "$CONNSHARE_SETUP_DONE" != "1" ]; then
 
   setup_cloud_connshare() {
@@ -11,6 +10,7 @@ if [ "$CONNSHARE_SETUP_DONE" != "1" ]; then
       echo "== Setting up ssh connection sharing to: ${RHOST}"
 
       if ssh -S "${GIT_CLOUD_SSHDIR}/%C.cs.socket" -O check "$RHOST" >& /dev/null; then
+          echo "Info: connection sharing already active."
           return
       fi
 
@@ -22,7 +22,7 @@ if [ "$CONNSHARE_SETUP_DONE" != "1" ]; then
 
       if ! ssh -S "${GIT_CLOUD_SSHDIR}/%C.cs.socket" -O check "$RHOST" >& /dev/null; then
           echo "Error: failed to open ssh connection with connection sharing to $RHOST"
-          exit 1
+          return
       fi
     fi
   }

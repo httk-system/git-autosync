@@ -72,5 +72,5 @@ else
         if [ "'$GIT_CLOUD_CONNSHARE'" == "auto" -o "'$GIT_CLOUD_CONNSHARE'" == "ask" ]; then
           source internal-git-cloud-setup-connshare
         fi
-        "${HELPER_PATH}"/"git-cloud-'${MODE}'" "$@"' "bash" "$@"
+        "${HELPER_PATH}"/"git-cloud-'${MODE}' '"$@"
 fi
