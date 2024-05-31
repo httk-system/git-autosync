@@ -42,14 +42,28 @@ if [ -n "$REMOTE_REPO" ]; then
     echo -e "${REMOTE_REPO}" > "${GIT_CLOUD_REPOCONFIG}/repos/${CLOUD_NAME}/remotes/origin.push"
 fi
 
-${GIT_SSH_COMMAND} "${GIT_CLOUD_HOST}" bash -c "echo -n \"\"; if [ ! -e \"${GIT_CLOUD_PATH}.repos/${CLOUD_NAME}.git\" ]; then git init -q --bare --initial-branch=main \"${GIT_CLOUD_PATH}.repos/${CLOUD_NAME}.git\"; fi"
+echo "$GIT_CLOUD_HOST" "$RHOST"
+echo "CHECK2:" $GIT_SSH_COMMAND -O check "$GIT_CLOUD_HOST"
+if $GIT_SSH_COMMAND -O check "$GIT_CLOUD_HOST" >& /dev/null; then
+    echo "Info: connection sharing already active."
+else
+    echo "NO!"
+fi
+exit 0
+
+echo ${GIT_SSH_COMMAND} "${GIT_CLOUD_HOST}" bash -c "echo -n \"\"; if [ ! -e \"${GIT_CLOUD_PATH}.repos/${CLOUD_NAME}.git\" ]; then git init -q --bare --initial-branch=main \"${GIT_CLOUD_PATH}.repos/${CLOUD_NAME}.git\"; fi"
+#${GIT_SSH_COMMAND} "${GIT_CLOUD_HOST}" bash -c "echo -n \"\"; if [ ! -e \"${GIT_CLOUD_PATH}.repos/${CLOUD_NAME}.git\" ]; then git init -q --bare --initial-branch=main \"${GIT_CLOUD_PATH}.repos/${CLOUD_NAME}.git\"; fi"
+${GIT_SSH_COMMAND} "${GIT_CLOUD_HOST}" bash -c "echo -n \"\"; if [ ! -e \"${GIT_CLOUD_PATH}.repos/${CLOUD_NAME}.git\" ]; then hostname; else echo why; fi"
 
 if [ -n "$REMOTE_REPO" ]; then
+    echo git -C "${LOCAL_PATH}" remote add cloud "${GIT_CLOUD_HOST}:${GIT_CLOUD_PATH}.repos/${CLOUD_NAME}"
     git -C "${LOCAL_PATH}" remote add cloud "${GIT_CLOUD_HOST}:${GIT_CLOUD_PATH}.repos/${CLOUD_NAME}"
     git push cloud
 else
+    echo git clone -q --origin cloud "${GIT_CLOUD_HOST}:${GIT_CLOUD_PATH}.repos/${CLOUD_NAME}" "${LOCAL_PATH}"
     git clone -q --origin cloud "${GIT_CLOUD_HOST}:${GIT_CLOUD_PATH}.repos/${CLOUD_NAME}" "${LOCAL_PATH}"
     git -C "${LOCAL_PATH}" commit --allow-empty -m "Initial commit"
     git -C "${LOCAL_PATH}" push
 fi
+echo git submodule add "${GIT_CLOUD_HOST}:${GIT_CLOUD_PATH}.repos/${CLOUD_NAME}" "${LOCAL_PATH}"
 git submodule add "${GIT_CLOUD_HOST}:${GIT_CLOUD_PATH}.repos/${CLOUD_NAME}" "${LOCAL_PATH}"

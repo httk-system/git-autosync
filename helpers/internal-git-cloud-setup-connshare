@@ -9,6 +9,7 @@ if [ "$CONNSHARE_SETUP_DONE" != "1" ]; then
 
       echo "== Setting up ssh connection sharing to: ${RHOST}"
 
+      echo "CHECK" ssh -S "${GIT_CLOUD_SSHDIR}/%C.cs.socket" -O check "$RHOST"
       if ssh -S "${GIT_CLOUD_SSHDIR}/%C.cs.socket" -O check "$RHOST" >& /dev/null; then
           echo "Info: connection sharing already active."
           return
@@ -27,18 +28,18 @@ if [ "$CONNSHARE_SETUP_DONE" != "1" ]; then
     fi
   }
 
-  export GIT_SSH_COMMAND="ssh -S \"${GIT_CLOUD_SSHDIR}\"/%C.cs.socket"
+  export GIT_SSH_COMMAND="ssh -S ${GIT_CLOUD_SSHDIR}/%C.cs.socket"
 
   function trap_exit {
         echo
-        echo "== Cleaning up ssh connection sharing sockets"
-        for SOCKET in "${GIT_CLOUD_SSHDIR}"/*.cs.socket; do
-            if [ "$SOCKET" == "${GIT_CLOUD_SSHDIR}/*.cs.socket" ]; then
-                break
-            fi
-            ssh -O exit -S "${SOCKET}" dummy >& /dev/null
-            rm -f "${SOCKET}"
-        done
+        echo "== (Don't) Cleaning up ssh connection sharing sockets"
+        #for SOCKET in "${GIT_CLOUD_SSHDIR}"/*.cs.socket; do
+        #    if [ "$SOCKET" == "${GIT_CLOUD_SSHDIR}/*.cs.socket" ]; then
+        #        break
+        #    fi
+        #    ssh -O exit -S "${SOCKET}" dummy >& /dev/null
+        #    rm -f "${SOCKET}"
+        #done
   }
   trap trap_exit EXIT
 

@@ -44,5 +44,3 @@ if [ -z "$GIT_SSH_COMMAND" ]; then
 fi
 
 mkdir -p ~/.ssh/git-cloud
-
-export GIT_CLOUD_HOST="$(hostname)"
