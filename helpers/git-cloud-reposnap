@@ -2,8 +2,7 @@
 
 set -e
 
-CONFDIR=$(git-cloud confdir)
-source "${CONFDIR}/config"
+source internal-git-cloud-read-config
 
 if [ "$1" == "describe" ]; then
    echo "Create a cloud snapshot of a single repo."
@@ -44,9 +43,8 @@ if [ ! -e "${MAIN_GIT_DIR}/worktrees/cloud" ]; then
     git -C "${MAIN_GIT_DIR}/x-cloud/worktree/cloud" commit -m "git-cloud initial $(hostname) ${LOCAL_BRANCH} ${CLEAN}" --allow-empty --no-gpg-sign
 fi
 
-echo "== Staging modifications into cloud worktree"
-git --git-dir "${CLOUD_GIT_DIR}" add -A
 sleep 1
+echo "== Determining local branch"
 while [ -n "$(git --git-dir "${CLOUD_GIT_DIR}" diff --quiet --cached)" -o "$LOCAL_BRANCH" != "$(git rev-parse --abbrev-ref main-worktree/HEAD)" ]; do
     echo "Note: files or branch changing while working; updating."
     LOCAL_BRANCH=$(git rev-parse --abbrev-ref main-worktree/HEAD)
@@ -54,6 +52,15 @@ while [ -n "$(git --git-dir "${CLOUD_GIT_DIR}" diff --quiet --cached)" -o "$LOCA
     git --git-dir "${CLOUD_GIT_DIR}" add -A
     sleep 1
 done
+
+echo "== Staging all modifications into cloud worktree"
+git --git-dir "${CLOUD_GIT_DIR}" add -A
+
+echo "== Stashing all the changes"
+git --git-dir "${CLOUD_GIT_DIR}" stash
+
+echo "== Switching cloud snapshot to same branch: $LOCAL_BRANCH"
+git --git-dir "${CLOUD_GIT_DIR}" checkout $(git --git-dir "${CLOUD_GIT_DIR}" show-ref --verify --quiet "refs/heads/$BRANCH" || echo '-b') "$BRANCH"
 
 CHANGE=$(git --git-dir "${CLOUD_GIT_DIR}" diff --shortstat main-worktree/HEAD)
 if [ -z "$CHANGE" ]; then
@@ -67,6 +74,12 @@ fi
 
 # Lets NOT merge histories; instead handle this when applying changes back
 #git --git-dir "${CLOUD_GIT_DIR}" merge main-worktree/HEAD --no-ff --no-gpg-sign -m "git-cloud merge $(hostname) ${LOCAL_BRANCH} $(date -R)" --allow-unrelated-histories
+
+echo "== Merging latest main worktree commits into cloud worktree"
+git --git-dir "${CLOUD_GIT_DIR}" merge main-worktree/HEAD -X ours --no-ff --no-gpg-sign -m "git-cloud merge $(hostname) ${LOCAL_BRANCH} $(date -R)" --allow-unrelated-histories
+
+echo "== Popping back change from stash"
+git --git-dir "${CLOUD_GIT_DIR}" stash pop
 
 if [ -n "$(git --git-dir "${CLOUD_GIT_DIR}" diff --name-only --cached)" ]; then
     echo "== Commiting changes"
@@ -91,7 +104,7 @@ else
 
 fi
 
-UPSTREAM="$(git for-each-ref --format='%(upstream:short)' "$(git rev-parse -q --symbolic-full-name ${BRANCH})")"
+UPSTREAM="$(git for-each-ref --format='%(upstream:short)' "$(git rev-parse -q --symbolic-full-name ${BRANCH} --)")"
 
 if [ -z "$UPSTREAM" ]; then
     echo "== Upstream branch not set, pushing with --set-upstream"

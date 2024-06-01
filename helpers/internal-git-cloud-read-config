@@ -4,8 +4,9 @@ if [ -n "$GIT_CLOUD_ROOT" ]; then
     export GIT_CLOUD_REPOCONFIG="$GIT_CLOUD_ROOT/.git-cloud"
     source "${GIT_CLOUD_REPOCONFIG}/config"
     export GIT_CLOUD_REMOTE="$(git -C "$GIT_CLOUD_ROOT" remote get-url cloud --push)"
-    export GIT_CLOUD_HOST="${GIT_CLOUD_REMOTE%%:*}"
-    export GIT_CLOUD_PATH="${GIT_CLOUD_REMOTE#*:}"
+    export GIT_CLOUD_REMOTE_HOST="${GIT_CLOUD_REMOTE%%:*}"
+    export GIT_CLOUD_REMOTE_PATH="${GIT_CLOUD_REMOTE#*:}"
+    export GIT_CLOUD_REMOTE_PATH="${GIT_CLOUD_REMOTE_PATH%.git}"
 fi
 
 if [ -e ~/.git-cloud ]; then
@@ -39,8 +40,10 @@ fi
 source "${CONFDIR}/config"
 
 # Needed, because we use this variable explicitly in some places of the scripts
-if [ -z "$GIT_SSH_COMMAND" ]; then
-    export GIT_SSH_COMMAND="ssh"
+if [ -z "$GIT_SSH" ]; then
+    export GIT_SSH="ssh"
 fi
 
 mkdir -p ~/.ssh/git-cloud
+
+export GIT_CLOUD_HOST="$(hostname)"

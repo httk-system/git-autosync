@@ -1,0 +1,25 @@
+#!/bin/bash
+
+set -e
+
+source internal-git-cloud-read-config
+
+if [ "$1" == "describe" ]; then
+   echo "Check status of cloud repo."
+   exit 0
+elif [ "$1" == "help" ]; then
+    echo
+    echo "Usage: git cloud status"
+    echo
+    echo "Checks the status of the cloud repo."
+    echo ""
+    exit 0
+fi
+
+if [ -z "${GIT_CLOUD_ROOT}" ]; then
+    echo "fatal: not a git cloud repository (or any of the parent directories): .git-cloud" >&2
+    exit 1
+fi
+
+cd "${GIT_CLOUD_ROOT}"
+git status

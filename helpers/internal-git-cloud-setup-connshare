@@ -9,7 +9,6 @@ if [ "$CONNSHARE_SETUP_DONE" != "1" ]; then
 
       echo "== Setting up ssh connection sharing to: ${RHOST}"
 
-      echo "CHECK" ssh -S "${GIT_CLOUD_SSHDIR}/%C.cs.socket" -O check "$RHOST"
       if ssh -S "${GIT_CLOUD_SSHDIR}/%C.cs.socket" -O check "$RHOST" >& /dev/null; then
           echo "Info: connection sharing already active."
           return
@@ -28,7 +27,19 @@ if [ "$CONNSHARE_SETUP_DONE" != "1" ]; then
     fi
   }
 
-  export GIT_SSH_COMMAND="ssh -S ${GIT_CLOUD_SSHDIR}/%C.cs.socket"
+  # There is no way to get GIT_SSH_COMMAND to work if quotes are needed
+  # export GIT_SSH_COMMAND="ssh -S ${GIT_CLOUD_SSHDIR}/%C.cs.socket"
+  # I think this is the only way to be absolutely safe:
+  if [ -n "$GIT_SSH_COMMAND" ]; then
+    echo -e "#!/bin/bash\nexec $GIT_SSH_COMMAND -S \"${GIT_CLOUD_SSHDIR}/%C.cs.socket\" \"\$@\"" > "${GIT_CLOUD_SSHDIR}/sshwrapper"
+  elif [ -n "$GIT_SSH" ]; then
+      echo -e "#!/bin/bash\nexec \"$GIT_SSH\" -S \"${GIT_CLOUD_SSHDIR}/%C.cs.socket\" \"\$@\"" > "${GIT_CLOUD_SSHDIR}/sshwrapper"
+  else
+      echo -e "#!/bin/bash\nexec ssh -S \"${GIT_CLOUD_SSHDIR}/%C.cs.socket\" \"\$@\"" > "${GIT_CLOUD_SSHDIR}/sshwrapper"
+  fi
+  chmod +x "${GIT_CLOUD_SSHDIR}/sshwrapper"
+  export GIT_SSH="${GIT_CLOUD_SSHDIR}/sshwrapper"
+  unset GIT_SSH_COMMAND
 
   function trap_exit {
         echo
