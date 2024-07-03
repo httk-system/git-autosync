@@ -55,7 +55,7 @@ if [ -n "$REMOTE_REPO" ]; then
 else
     git clone -q --origin cloud "${GIT_CLOUD_REMOTE_HOST}:${GIT_CLOUD_REMOTE_PATH}.repos/${CLOUD_NAME}" "${LOCAL_PATH}"
     # Create initial commit only if repo does not contain any commit
-    if ! git -C "${LOCAL_PATH}" Archives/ rev-list --max-parents=0 HEAD >& /dev/null; then
+    if ! git -C "${LOCAL_PATH}" rev-list --max-parents=0 HEAD >& /dev/null; then
         git -C "${LOCAL_PATH}" commit --allow-empty -m "Initial commit"
         git -C "${LOCAL_PATH}" push
     fi
