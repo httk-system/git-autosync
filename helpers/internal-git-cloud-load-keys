@@ -12,7 +12,7 @@ check_key() {
   fi
 }
 
-for PUBKEY in "$GIT_CLOUD_SSHDIR"/*.pub; do
+find "$GIT_CLOUD_SSHDIR" -name "*.pub" | while read PUBKEY; do
   PRIVKEY=$(basename "$PUBKEY" .pub)
   if check_key ~/.ssh/git-cloud/"$PRIVKEY"; then
       echo "== Adding key: $PRIVKEY"

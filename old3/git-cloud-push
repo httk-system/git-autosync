@@ -5,11 +5,11 @@ set -e
 source internal-git-cloud-read-config
 
 if [ "$1" == "describe" ]; then
-   echo "Check status of cloud repo."
+   echo "Push up changes of cloud repo."
    exit 0
 elif [ "$1" == "help" ]; then
     echo
-    echo "Usage: git cloud status"
+    echo "Usage: git cloud push"
     echo
     echo "Checks the status of the cloud repo."
     echo ""
@@ -22,5 +22,4 @@ if [ -z "${GIT_CLOUD_ROOT}" ]; then
 fi
 
 cd "${GIT_CLOUD_ROOT}"
-git pull
-git submodule update --remote --recursive
+git push

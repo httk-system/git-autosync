@@ -5,13 +5,13 @@ set -e
 source internal-git-cloud-read-config
 
 if [ "$1" == "describe" ]; then
-   echo "Check status of cloud repo."
+   echo "Init one or more subrepositories"
    exit 0
 elif [ "$1" == "help" ]; then
     echo
-    echo "Usage: git cloud status"
+    echo "Usage: git cloud repoinit <one or more subrepos>"
     echo
-    echo "Checks the status of the cloud repo."
+    echo "Initializes one or more subrepos."
     echo ""
     exit 0
 fi
@@ -22,4 +22,4 @@ if [ -z "${GIT_CLOUD_ROOT}" ]; then
 fi
 
 cd "${GIT_CLOUD_ROOT}"
-git push
+git submodule init "$@"
