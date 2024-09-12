@@ -56,12 +56,28 @@ source internal-git-cloud-read-config
 
 export GIT_CLOUD_ORIG_SSH_AUTH_SOCK="$SSH_AUTH_SOCK"
 
+setup_git_ssh() {
+  if [ -n "$GIT_SSH_COMMAND" ]; then
+    echo -e "#!/bin/bash\nexec $GIT_SSH_COMMAND $1 \"\$@\"" > "${GIT_CLOUD_SSHDIR}/sshwrapper"
+  elif [ -n "$GIT_SSH" ]; then
+      echo -e "#!/bin/bash\nexec \"$GIT_SSH\" $1 \"\$@\"" > "${GIT_CLOUD_SSHDIR}/sshwrapper"
+  else
+      echo -e "#!/bin/bash\nexec ssh $1 \"\$@\"" > "${GIT_CLOUD_SSHDIR}/sshwrapper"
+  fi
+  chmod +x "${GIT_CLOUD_SSHDIR}/sshwrapper"
+  export GIT_SSH="${GIT_CLOUD_SSHDIR}/sshwrapper"
+  unset GIT_SSH_COMMAND
+}
+
+if [ "$GIT_CLOUD_CONNSHARE" == "auto" ]; then
+    setup_git_ssh "-oControlMaster=auto  -oControlPersist=2h -S \"${GIT_CLOUD_SSHDIR}/%C.cs.socket\""
+elif [ "$GIT_CLOUD_CONNSHARE" == "ask" ]; then
+    setup_git_ssh "-oControlMaster=autoask  -oControlPersist=2h -S \"${GIT_CLOUD_SSHDIR}/%C.cs.socket\""
+fi
+
 if [ "$GIT_CLOUD_WRAP_SSHAGENT" != "yes" ]; then
     if [ "$GIT_CLOUD_READ_KEYS" == "yes" ]; then
         source internal-git-cloud-load-keys
-    fi
-    if [ "$GIT_CLOUD_CONNSHARE" == "auto" -o "$GIT_CLOUD_CONNSHARE" == "ask" ]; then
-        source internal-git-cloud-setup-connshare
     fi
     exec "${HELPER_PATH}"/"git-cloud-${MODE}" "$@"
 else
@@ -74,3 +90,9 @@ else
         fi
         "${HELPER_PATH}"/"git-cloud-'${MODE}' '"$@"
 fi
+
+find "$GIT_CLOUD_SSHDIR" -name "*.cs.socket" | while read SOCKET; do
+    REMOTE_NAME="$(basename "$SOCKET" .cs.socket)"
+    echo "== Closing open remote: ${REMOTE_NAME}"
+    ssh -O exit -S "${SOCKET}"
+done

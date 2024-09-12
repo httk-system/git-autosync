@@ -1,0 +1,103 @@
+#!/bin/bash
+
+set -e
+
+source internal-git-cloud-read-config
+
+if [ "$1" == "describe" ]; then
+   echo "Configure a remote host for ssh connection-sharing for git-cloud."
+   exit 0
+elif [ "$1" == "help" -o "$#" -lt "1" ]; then
+    echo
+    echo "Usage: git cloud connshare [add|remove|close] <remote>"
+    echo
+    echo "Configure a remote host for ssh connection-sharing for git-cloud"
+    echo
+    echo "Modes:"
+    echo "  add: add the connection sharing setup for this remote"
+    echo "  remove: remove the connection sharing setup for this remote"
+    echo "  open: open the connection sharing setup for this remote (or, with no remote, all)"
+    echo "  close: close the connection sharing for this remote (or with no remote, all)"
+    echo ""
+    exit 0
+fi
+
+MODE="$1"
+shift 1
+
+if [ "$MODE" != "remove" -a "$MODE" != "add" -a "$MODE" != "close" -a "$MODE" != "open" ];then
+    echo "git cloud connshare: uknown mode: $MODE"
+    exit 1
+fi
+
+REMOTE="$1"
+
+if [ -n "${GIT_CLOUD_SSHDIR}" -a ! -e "$GIT_CLOUD_SSHDIR" ]; then
+    mkdir -p "$GIT_CLOUD_SSHDIR"
+    chmod go-rwx "$GIT_CLOUD_SSHDIR"
+fi
+
+if [ "$MODE" == "close" -o "$MODE" == "remove" ]; then
+    if [ -n "$REMOTE" ]; then
+	find "$GIT_CLOUD_SSHDIR" -name "*.cs.socket" | while read SOCKET; do
+	    REMOTE_NAME="$(basename "$SOCKET" .cs.socket)"
+	    echo "== Closing open remote: ${REMOTE_NAME}"
+	    ssh -O exit -S "${SOCKET}"
+	done
+    else
+	if [ -e "$GIT_CLOUD_SSHDIR/$REMOTE.cs.socket" ]; then
+	    ssh -O exit -S "$GIT_CLOUD_SSHDIR/$REMOTE.cs.socket"
+	else
+	    echo "== This remote does not appear to be open."
+	fi
+    fi
+fi
+
+if [ "$MODE" == "remove" ]; then
+    if [ -e "${GIT_CLOUD_SSHDIR}/$REMOTE.cs" ]; then
+        rm "${GIT_CLOUD_SSHDIR}/$REMOTE.cs"
+    else
+        echo "== No configuration for ssh connection sharing for $REMOTE exist."
+    fi
+fi
+    
+if [ "$MODE" == "create" ]; then
+    if [ ! -e "${GIT_CLOUD_SSHDIR}/$REMOTE.cs" ]; then
+        echo "== Configuring ${REMOTE} to use ssh connection sharing."
+        touch "${GIT_CLOUD_SSHDIR}/$REMOTE.cs"
+    fi
+fi
+
+if [ "$MODE" == "open" ]; then
+    if [ -n "$REMOTE" ]; then
+	find "$GIT_CLOUD_SSHDIR" -name "*.cs" | while read REMOTE_ENTRY; do
+	    REMOTE_NAME="$(basename "$REMOTE_ENTRY" .cs)"
+
+	    if ssh -S "${GIT_CLOUD_SSHDIR}/%C.cs.socket" -O check "$RHOST" >& /dev/null; then
+		echo "== Connection sharing already open: ${REMOTE_NAME}"
+		continue
+	    fi
+
+	    echo "== Opening remote: ${REMOTE_NAME}"
+	    
+	    if [ "$CONNSHARE" == "auto" ]; then
+		ssh -M -S "${GIT_CLOUD_SSHDIR}/%C.cs.socket" -o "ControlPersist=2h" "$RHOST" true
+	    else
+		ssh -MM -S "${GIT_CLOUD_SSHDIR}/%C.cs.socket" -o "ControlPersist=2h" "$RHOST" true
+	    fi
+
+	    if ! ssh -S "${GIT_CLOUD_SSHDIR}/%C.cs.socket" -O check "$RHOST" >& /dev/null; then
+		echo "Error: failed to open ssh connection with connection sharing to $RHOST"
+		return
+	    fi
+	    
+	    ssh -O exit -S "${SOCKET}"
+	done
+    else
+	if [ -e "$GIT_CLOUD_SSHDIR/$REMOTE.cs.socket" ]; then
+	    ssh -O exit -S "$GIT_CLOUD_SSHDIR/$REMOTE.cs.socket"
+	else
+	    echo "== This remote does not appear to be open."
+	fi
+    fi
+fi
