@@ -1,0 +1,47 @@
+#!/bin/bash
+
+set -e
+
+source internal-git-cloud-read-config
+
+if [ "$1" == "describe" ]; then
+   echo "Init one or more subrepositories"
+   exit 0
+elif [ "$1" == "help" -o "$1" == "" ]; then
+    echo
+    echo "Usage: git cloud repo [attach|snap] <path to one or more existing subrepos>"
+    echo
+    echo "Modes:"
+    echo "  attach: Initializes and updates one or more subrepos."
+    echo "  snap: take snapshot of one or more subrepos"
+    echo ""
+    exit 0
+fi
+
+MODE="$1"
+shift 1
+
+if [ "$MODE" != "attach" -a "$MODE" != "snap" ]; then
+    echo "git cloud repo: unknown mode: $MODE"
+    exit 1
+fi
+
+if [ -z "${GIT_CLOUD_ROOT}" ]; then
+    echo "fatal: not a git cloud repository (or any of the parent directories): .git-cloud" >&2
+    exit 1
+fi
+cd "${GIT_CLOUD_ROOT}"
+
+if [ "$MODE" == "attach" ]; then
+    git submodule init "$@"
+    git submodule update "$@"
+elif [ "$MODE" == "snap" ]; then
+    if [ -z "$1" ]; then
+	git submodule foreach "git snap snapshot cloud"
+    else
+	for REPO in "$@"; do
+	    cd "$REPO"
+	    git snap snapshot cloud
+	done
+    fi
+fi

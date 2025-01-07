@@ -11,14 +11,9 @@ elif [ "$1" == "help" -o "$#" -ne "1" ]; then
     echo
     echo "Usage: git cloud key <remote>"
     echo
-    echo "Create a public ssh key specifically for use with git-cloud for <remote>."
+    echo "Create a public ssh key specifically for use with git-cloud."
     echo ""
     exit 0
-fi
-
-if [ -z "${GIT_CLOUD_ROOT}" -o -z "${GIT_CLOUD_REMOTE_HOST}" ]; then
-    echo "fatal: not a git cloud repository (or any of the parent directories): .git-cloud" >&2
-    exit 1
 fi
 
 REMOTE="$1"

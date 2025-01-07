@@ -1,0 +1,19 @@
+#!/bin/bash
+
+set -e
+
+CONFDIR=$(git-cloud confdir)
+source "${CONFDIR}/config"
+
+if [ "$1" == "describe" ]; then
+   echo "Create a snapshot of the cloud repo and all included repos."
+   exit 0
+elif [ "$1" == "help" ]; then
+    echo
+    echo "Usage: git cloud snap"
+    echo
+    echo "Create a snapshot of the cloud repo and all included repos."
+    echo
+    exit 0
+fi
+

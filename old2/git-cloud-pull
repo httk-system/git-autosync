@@ -1,0 +1,59 @@
+#!/bin/bash
+
+set -e
+
+source internal-git-cloud-read-config
+
+if [ "$1" == "describe" ]; then
+   echo "Run git pull on all repos in a cloud repotree."
+   exit 0
+elif [ "$1" == "help" ]; then
+    echo
+    echo "Usage: git cloud pull [--authed-only]"
+    echo
+    echo
+    echo "    ---authed-only: only pull from repos where git-cloud has setup and handles auth via public keys or connection sharing"
+    echo
+    echo "Run git pull on all repos in a cloud repotree."
+    echo
+    exit 0
+fi
+
+AUTHED_ONLY="false"
+if [ "$1" == "--authed-only" ]; then
+    AUTHED_ONLY="true"
+fi
+
+# Ascend until we find a .git-cloud
+cd "$(pwd -P)"
+while [ "$(pwd -P)" != "/" ]; do
+  if [ -f ".git-cloud" ]; then
+      break
+  fi
+  cd ..
+done
+if [ ! -f ".git-cloud" ]; then
+    echo "Git cloud pull must be run inside a git cloud repotree." >&2
+    exit 1
+fi
+
+find . -type d \( -name Trash -prune \) -o \( -exec test -d '{}/.git' \; -prune -print \) | while read REPOPATH; do
+    echo "== Pulling in repo: $REPOPATH"
+    TRACKING=$(git -C "$REPOPATH" rev-parse --abbrev-ref --symbolic-full-name @{u})
+    REMOTE=$(git -C "$REPOPATH" remote get-url "${TRACKING%%/*}")
+    #CLOUD_REMOTE=$(git -C "$REPOPATH" remote get-url cloud)
+    #if [ "$REMOTE" == "$CLOUD_REMOTE" ]; then
+    #    echo "== Pulling from: $REPOPATH"
+    #    git -C "$REPOPATH" pull
+    #fi
+    RHOST="${REMOTE%:*}"
+    echo "Pulling from remote: $RHOST"
+    if [ -e "$GIT_CLOUD_SSHDIR/$RHOST.pub" ] || ssh -S "${GIT_CLOUD_SSHDIR}/%C.cs.socket" -O check "$RHOST" >& /dev/null; then
+        git -C "$REPOPATH" pull
+    else
+        if [ "$AUTHED_ONLY" != "true" ]; then
+            SSH_AUTH_SOCK=$GIT_CLOUD_ORIG_SSH_AUTH_SOCK git -C "$REPOPATH" pull
+        fi
+    fi
+    echo
+done

@@ -2,55 +2,86 @@
 
 set -e
 
-CONFDIR=$(git-cloud confdir)
-source "${CONFDIR}/config"
+source internal-git-cloud-read-config
 
 if [ "$1" == "describe" ]; then
-   echo "Create a snapshot of the current workdir and push it to the cloud."
+   echo "Create a cloud snapshot of a single repo."
    exit 0
 elif [ "$1" == "help" ]; then
     echo
-    echo "Usage: git cloud reposnap"
+    echo "Usage: git cloud repo-snap"
     echo
-    echo "Create a snapshot of the current workdir and push it to the cloud."
+    echo "Create a cloud snapshot of a single repo."
     echo
     exit 0
+fi
+
+if [ -z "${GIT_CLOUD_ROOT}" -o -z "${GIT_CLOUD_HOST}" ]; then
+    echo "fatal: not a git cloud repository (or any of the parent directories): .git-cloud" >&2
+    exit 1
 fi
 
 GIT_TOP_LEVEL=$(git rev-parse --show-toplevel)
 cd "$GIT_TOP_LEVEL"
 MAIN_GIT_DIR=$(git rev-parse --git-dir)
-CLOUD_GIT_DIR="${MAIN_GIT_DIR}/worktrees/cloud"
-BRANCH="${GIT_CLOUD_SNAPSHOT_BRANCH_PREFIX}-$(hostname)"
+SNAPSHOT_GIT_DIR="${MAIN_GIT_DIR}/worktrees/snapshot"
+SNAPSHOT_WORKTREE="${MAIN_GIT_DIR}/x-cloud/worktree/snapshot"
 LOCAL_BRANCH=$(git rev-parse --abbrev-ref main-worktree/HEAD)
+BRANCH="${GIT_CLOUD_SNAPSHOT_BRANCH_PREFIX}/${LOCAL_BRANCH}/${GIT_CLOUD_HOST}"
 LAST_COMMIT=$(git rev-parse HEAD)
 
-if [ ! -e "${MAIN_GIT_DIR}/worktrees/cloud" ]; then
+if [ ! -e "${SNAPSHOT_GIT_DIR}" ]; then
     echo "== Setting up cloud worktree"
     mkdir -p "${MAIN_GIT_DIR}/x-cloud/worktree"
 
-    git worktree add "${MAIN_GIT_DIR}/x-cloud/worktree/cloud" -b "${BRANCH}" --no-checkout
+    git worktree add "${SNAPSHOT_WORKTREE}" -b "${BRANCH}" --no-checkout
     # Consider instead creating an orphan branch instead. I'm unsure about the differences it will cause,
     # but it seems to increase time for first sync a lot.
     #
     # git worktree add "${MAIN_GIT_DIR}/x-cloud/worktree/cloud" --no-checkout
     # git -C "${MAIN_GIT_DIR}/x-cloud/worktree/cloud" switch --orphan "${BRANCH}"
     #
-    git -C "${MAIN_GIT_DIR}/x-cloud/worktree/cloud" commit -m "git-cloud initial $(hostname) ${LOCAL_BRANCH} ${CLEAN}" --allow-empty --no-gpg-sign
+    git -C "${SNAPSHOT_WORKTREE}" commit -m "git-cloud initial $(hostname) ${LOCAL_BRANCH} ${CLEAN}" --allow-empty --no-gpg-sign
 fi
 
-echo "== Staging modifications into cloud worktree"
-git --git-dir "${CLOUD_GIT_DIR}" add -A
 sleep 1
-while [ -n "$(git --git-dir "${CLOUD_GIT_DIR}" diff --quiet --cached)" -o "$LOCAL_BRANCH" != "$(git rev-parse --abbrev-ref main-worktree/HEAD)" ]; do
+echo "== Determining local branch"
+while [ "$LOCAL_BRANCH" != "$(git rev-parse --abbrev-ref main-worktree/HEAD)" ]; do
     echo "Note: files or branch changing while working; updating."
     LOCAL_BRANCH=$(git rev-parse --abbrev-ref main-worktree/HEAD)
     LAST_COMMIT=$(git rev-parse HEAD)
-    git --git-dir "${CLOUD_GIT_DIR}" add -A
     sleep 1
 done
 
-CHANGE=$(git --git-dir "${CLOUD_GIT_DIR}" diff --shortstat main-worktree/HEAD)
+#while [ -n "$(git --git-dir "${SNAPSHOT_GIT_DIR}" diff --quiet)" -o "$LOCAL_BRANCH" != "$(git rev-parse --abbrev-ref main-worktree/HEAD)" ]; do
+#    echo "Note: files or branch changing while working; updating."
+#    LOCAL_BRANCH=$(git rev-parse --abbrev-ref main-worktree/HEAD)
+#    LAST_COMMIT=$(git rev-parse HEAD)
+#    git --git-dir "${SNAPSHOT_GIT_DIR}" add -A
+#    sleep 1
+#done
+
+echo "== Make sure nothing is staged in cloud worktree"
+git -C "${SNAPSHOT_WORKTREE}" reset
+
+echo "== Switching cloud snapshot to same branch: $LOCAL_BRANCH"
+git  -C "${SNAPSHOT_WORKTREE}" symbolic-ref HEAD "refs/heads/$BRANCH"
+#git -C "${SNAPSHOT_WORKTREE}" checkout $(git --git-dir "${SNAPSHOT_GIT_DIR}" show-ref --verify --quiet "refs/heads/$BRANCH" || echo '-b') "$BRANCH"
+
+echo "== Merging latest main worktree commits into cloud worktree"
+git -C "${SNAPSHOT_WORKTREE}" merge main-worktree/HEAD -s ours --no-ff --no-gpg-sign -m "git-cloud merge $(hostname) ${LOCAL_BRANCH} $(date -R)" --allow-unrelated-histories
+
+# Lets NOT merge histories; instead handle this when applying changes back
+#git --git-dir "${SNAPSHOT_GIT_DIR}" merge main-worktree/HEAD --no-ff --no-gpg-sign -m "git-cloud merge $(hostname) ${LOCAL_BRANCH} $(date -R)" --allow-unrelated-histories
+
+#echo "== Stashing all the changes"
+#git --git-dir "${SNAPSHOT_GIT_DIR}" stash --include-untracked
+
+#echo "== Popping back change from stash"
+#git --git-dir "${SNAPSHOT_GIT_DIR}" stash pop
+
+echo "== Determine if cloud snapshot tree is a clean or dirty state"
+CHANGE=$(git --git-dir "${SNAPSHOT_GIT_DIR}" diff --shortstat main-worktree/HEAD)
 if [ -z "$CHANGE" ]; then
     CLEAN="clean"
 else
@@ -60,43 +91,43 @@ else
     CLEAN="unclean"
 fi
 
-# Lets NOT merge histories; instead handle this when applying changes back
-#git --git-dir "${CLOUD_GIT_DIR}" merge main-worktree/HEAD --no-ff --no-gpg-sign -m "git-cloud merge $(hostname) ${LOCAL_BRANCH} $(date -R)" --allow-unrelated-histories
+echo "== Stage all modifications into cloud worktree"
+git --git-dir "${SNAPSHOT_GIT_DIR}" add -A
 
-if [ -n "$(git --git-dir "${CLOUD_GIT_DIR}" diff --name-only --cached)" ]; then
+if [ -n "$(git --git-dir "${SNAPSHOT_GIT_DIR}" diff --name-only --cached)" ]; then
     echo "== Commiting changes"
-    git --git-dir "${CLOUD_GIT_DIR}" commit -m "git-cloud commit $(hostname) ${LOCAL_BRANCH} ${LAST_COMMIT} ${CLEAN} ${CHANGE}" --no-gpg-sign
+    git --git-dir "${SNAPSHOT_GIT_DIR}" commit -m "git-cloud commit $(hostname) ${LOCAL_BRANCH} ${LAST_COMMIT} ${CLEAN} ${CHANGE}" --no-gpg-sign
 else
 
-    LAST_MSG=$(git --git-dir "${CLOUD_GIT_DIR}" log -1 --pretty=%B | head -n 1)
+    LAST_MSG=$(git --git-dir "${SNAPSHOT_GIT_DIR}" log -1 --pretty=%B | head -n 1)
     LAST_SNAP_CLIENT=$(cut -d ' ' -f 1 <<< "$LAST_MSG")
     if [ "$LAST_SNAP_CLIENT" == "git-cloud" ]; then
         LAST_SNAP_BRANCH=$(cut -d ' ' -f 4 <<< "$LAST_MSG")
         LAST_SNAP_COMMIT=$(cut -d ' ' -f 5 <<< "$LAST_MSG")
         if [ "$LAST_SNAP_BRANCH" != "$LOCAL_BRANCH" -o "$LAST_COMMIT" != "$LAST_SNAP_COMMIT" ]; then
             echo "== Commiting empty due to branch or top commit change"
-            git --git-dir "${CLOUD_GIT_DIR}" commit --allow-empty -m "git-cloud commit $(hostname) ${LOCAL_BRANCH} ${LAST_COMMIT} ${CLEAN} ${CHANGE}" --no-gpg-sign
+            git --git-dir "${SNAPSHOT_GIT_DIR}" commit --allow-empty -m "git-cloud commit $(hostname) ${LOCAL_BRANCH} ${LAST_COMMIT} ${CLEAN} ${CHANGE}" --no-gpg-sign
         else
             echo "== No changes to commit"
         fi
     else
         echo "== Commiting empty commit due to unparseable previous message"
-        git --git-dir "${CLOUD_GIT_DIR}" commit --allow-empty -m "git-cloud commit $(hostname) ${LOCAL_BRANCH} ${LAST_COMMIT} ${CLEAN} ${CHANGE}" --no-gpg-sign
+        git --git-dir "${SNAPSHOT_GIT_DIR}" commit --allow-empty -m "git-cloud commit $(hostname) ${LOCAL_BRANCH} ${LAST_COMMIT} ${CLEAN} ${CHANGE}" --no-gpg-sign
     fi
 
 fi
 
-UPSTREAM="$(git for-each-ref --format='%(upstream:short)' "$(git rev-parse -q --symbolic-full-name ${BRANCH})")"
+UPSTREAM="$(git for-each-ref --format='%(upstream:short)' "$(git rev-parse -q --symbolic-full-name ${BRANCH} --)")"
 
 if [ -z "$UPSTREAM" ]; then
     echo "== Upstream branch not set, pushing with --set-upstream"
-    git --git-dir "${CLOUD_GIT_DIR}" push --follow-tags --set-upstream "${GIT_CLOUD_REMOTE_NAME}" "${BRANCH}"
+    git --git-dir "${SNAPSHOT_GIT_DIR}" push --follow-tags --set-upstream "${GIT_CLOUD_REMOTE_NAME}" "${BRANCH}"
 
 else
 
-    if [ -n "$(git --git-dir "${CLOUD_GIT_DIR}" cherry "${GIT_CLOUD_REMOTE_NAME}/${BRANCH}" | head -n 1)" ]; then
+    if [ -n "$(git --git-dir "${SNAPSHOT_GIT_DIR}" cherry "${GIT_CLOUD_REMOTE_NAME}/${BRANCH}" | head -n 1)" ]; then
         echo "== Changes made, pushing to cloud"
-        git --git-dir "${CLOUD_GIT_DIR}" push --follow-tags
+        git --git-dir "${SNAPSHOT_GIT_DIR}" push --follow-tags
     else
         echo "== No commits to push to cloud"
     fi
@@ -104,3 +135,4 @@ else
 fi
 
 exit 0
+

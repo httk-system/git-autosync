@@ -1,0 +1,30 @@
+#!/bin/bash
+
+set -e
+
+source internal-git-cloud-read-config
+
+if [ "$1" == "describe" ]; then
+   echo "Clone a cloud repo."
+   exit 0
+elif [ "$1" == "help" ]; then
+    echo
+    echo "Usage: git cloud clone <repo> [local path]"
+    echo
+    echo "Clone a cloud repository at <cloud repo> into <local path>."
+    echo ""
+    exit 0
+fi
+
+CLOUD_REPO=$1
+CLOUD_REPO="${CLOUD_REPO%.git}"
+
+LOCAL_PATH="$2"
+
+CLOUD_HOST="${CLOUD_REPO%%:*}"
+CLOUD_PATH="${CLOUD_REPO#*:}"
+if [ -z "$LOCAL_PATH" ]; then
+    LOCAL_PATH="$(basename "$CLOUD_PATH")"
+fi
+
+git clone --origin "cloud" -q "${CLOUD_REPO}" "${LOCAL_PATH}"

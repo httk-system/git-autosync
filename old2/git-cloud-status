@@ -1,0 +1,55 @@
+#!/bin/bash
+
+set -e
+
+source internal-git-cloud-read-config
+
+if [ "$1" == "describe" ]; then
+   echo "Show the difference between the working tree and the latest cloud checkpoint(s)."
+   exit 0
+elif [ "$1" == "help" ]; then
+    echo
+    echo "Usage: git cloud status [--no-fetch]"
+    echo
+    echo "Show the difference between the working tree and the latest cloud checkpoint."
+    echo ""
+    echo "Options:"
+    echo "  --no-fetch: base output on what is already known about the"
+    echo "              cloud remote without starting with a fetch operation."
+    echo
+    exit 0
+fi
+
+FETCH="true"
+if [ "$1" == "--no-fetch" ]; then
+    FETCH="false"
+    FETCHARG="--no-fetch"
+    shift 1
+fi
+
+# Ascend until we find a .git-cloud
+cd "$(pwd -P)"
+while [ "$(pwd -P)" != "/" ]; do
+  if [ -f ".git-cloud" ]; then
+      break
+  fi
+  cd ..
+done
+if [ ! -f ".git-cloud" ]; then
+    echo "Git cloud pull must be run inside a git cloud repotree." >&2
+    exit 1
+fi
+
+if [ "$SNAP" == "true" ]; then
+    git-cloud-snapshot
+fi
+
+find . -type d \( -name Trash -prune \) -o \( -exec test -d '{}/.git' \; -prune -print \)  | while read REPOPATH; do
+    ABSREPOPATH=$(cd "$REPOPATH"; pwd -P)
+    echo
+    echo "== REPO: $ABSREPOPATH"
+
+    (cd "$REPOPATH"
+     git-cloud-repostatus $FETCHARG
+    )
+done
