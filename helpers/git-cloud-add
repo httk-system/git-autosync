@@ -49,9 +49,9 @@ else
 fi
 
 if [ -n "$REMOTE_REPO" ]; then
-    git clone -q --origin cloud "${REMOTE_REPO}" "${LOCAL_PATH}"
+    #git clone -q --origin cloud "${REMOTE_REPO}" "${LOCAL_PATH}"
     git -C "${LOCAL_PATH}" remote add cloud "${GIT_CLOUD_REMOTE_HOST}:${GIT_CLOUD_REMOTE_PATH}.repos/${CLOUD_NAME}"
-    git push cloud
+    git -C "${LOCAL_PATH}" push cloud
 else
     git clone -q --origin cloud "${GIT_CLOUD_REMOTE_HOST}:${GIT_CLOUD_REMOTE_PATH}.repos/${CLOUD_NAME}" "${LOCAL_PATH}"
     # Create initial commit only if repo does not contain any commit
